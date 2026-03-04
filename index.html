@@ -287,13 +287,18 @@ const C = {
   STOP_SEC:3, // seconds for full stop compliance
 
   // Road Z positions
+  // Major EW: dual carriageway -- upper (z=-50) ONE-WAY eastbound,
+  //           lower (z=-36) ONE-WAY westbound, separated by yellow median z=-43
   MAJ_UPPER_Z:-50, MAJ_LOWER_Z:-36, MAJ_MID_Z:-43,
-  // Road X positions (vertical roads)
+  // Major NS: dual carriageway -- left (x=-70) southbound, right (x=-56) northbound
   MAJ_LEFT_X:-70, MAJ_RIGHT_X:-56,
+  // Minor roads: TWO-WAY (solid yellow centre line)
   MIN_H_Z:30, MIN_V_X:40,
 
-  // Roundabout
+  // Roundabout (4 concentric lanes, clockwise, no lane changes)
   RDT_X:65, RDT_Z:-43, RDT_OUTER:24, RDT_INNER:12, RDT_LANE_W:3,
+  // Roundabout arm length (approach road from ring edge outward)
+  RDT_ARM:18,
 
   PENALTIES:{
     SPEEDING:8, RED_LIGHT:20, WRONG_WAY:25, WRONG_GEAR:15,
@@ -304,20 +309,34 @@ const C = {
   }
 };
 
-// Lane exit mapping -- MTB official
+// Lane exit mapping -- NTSA MTB Official (spec v2)
+// Major formula 2-1-2-4:  L1=2opts, L2=1opt, L3=2opts, L4=4opts
+// Minor formula 2-1-5:    L1=2opts, L2=1opt, L3=5opts (Power Lane)
 const LANE_EXITS = {
   major:{
-    1:['straight (0°)','left (90°)'],
-    2:['straight (0°)'],
+    1:['left (90°)','straight (0°)'],
+    2:['straight (0°) ONLY'],
     3:['straight (0°)','right (90°)'],
-    4:['right (90°)','opposite (180°)','third exit (270°)','full circle (360°)']
+    4:['right (90°)','U-turn (180°)','3rd exit (270°)','full circle (360°)']
   },
   minor:{
-    1:['straight (0°)','left (90°)'],
-    2:['straight (0°)'],
-    3:['straight (0°)','right (90°)','U-turn (180°)']
+    1:['left (90°)','straight (0°)'],
+    2:['straight (0°) ONLY'],
+    3:['straight (0°)','right (90°)','U-turn (180°)','P-turn (270°)','full circle (360°)']
   }
 };
+
+// Subtraction rule: major lane -> minor lane (major=4 lanes -> minor=3 lanes)
+// majorLane - 1 = minorLane.  Lane4->L3, Lane3->L2, Lane2->L1
+// Addition rule: minor lane -> major lane (minor=3 lanes -> major=4 lanes)
+// minorLane + 1 = majorLane.  Lane1->L2(or L1 for left), Lane2->L3, Lane3->L4
+const SUBTRACTION_RULE={4:3,3:2,2:1};
+const ADDITION_RULE={1:2,2:3,3:4};
+// Roundabout entry mapping:
+// Major L1/L2 -> outermost roundabout lanes (1/2)
+// Major L3/L4 -> innermost roundabout lanes (3/4)
+// Minor L1 -> outer roundabout lane (1), Minor L3 -> inner lane (3)
+const RDT_ENTRY_LANE_MAP={major:{1:1,2:2,3:3,4:4},minor:{1:1,2:2,3:3}};
 
 // -- THREE.JS -------------------------------------------------
 const mc = document.getElementById('mc');
@@ -387,124 +406,160 @@ function buildWorld(scenario){
 }
 
 // -- MAJOR ROADS ----------------------------------------------
+// EW dual carriageway: upper (eastbound) z=-50, lower (westbound) z=-36
+//   Each road is 14u wide (4 lanes×3.5u). Outer edge at ±7u from centre.
+//   Upper: z=-57 to z=-43.  Lower: z=-43 to z=-29.
+//   Yellow median at z=-43 between the two.
+//   EW roads terminate at x=41 (rdtWest). W arm of roundabout takes over.
+//
+// NS dual carriageway: left (southbound) x=-70, right (northbound) x=-56
+//   Full length z=-130 to z=+130. Yellow median at x=-63.
+//   NS roads are INDEPENDENT of the roundabout (no direct connection).
+//
+// Minor H road: two-way, z=+30, x from -48 to +100. Yellow centre line.
+// Minor V road: two-way, x=+40, z from -28 to +80.  Yellow centre line.
 function buildMajorRoads(){
   const RC=0x1e2228, hw=C.MAJ_W/2, lw=C.MAJ_LW;
+  const rdtWest=C.RDT_X-C.RDT_OUTER; // 41 — arm takes over east of here
+  const ewLen=rdtWest+130;            // 171
+  const ewCx=(rdtWest-130)/2;         // -44.5
 
-  // -- EAST-WEST ONE-WAY PAIR --
+  // ── EW ONE-WAY DUAL CARRIAGEWAY ─────────────────────────────
   [{z:C.MAJ_UPPER_Z,dir:1},{z:C.MAJ_LOWER_Z,dir:-1}].forEach(({z,dir})=>{
-    const r=box(300,.2,C.MAJ_W,RC); r.position.set(0,.1,z); world.add(r);
-    // White broken lane dividers
+    // Road slab
+    const r=box(ewLen,.2,C.MAJ_W,RC); r.position.set(ewCx,.1,z); world.add(r);
+    // Broken lane dividers (3 lines between 4 lanes)
     for(let l=1;l<C.MAJ_LANES;l++){
       const lz=z-hw+l*lw;
-      for(let x=-140;x<140;x+=8){
-        const d=box(4,.12,.18,0xeeeeff); d.position.set(x,.22,lz); world.add(d);
+      for(let x=-128;x<rdtWest-2;x+=8){
+        const d=box(4,.12,.18,0xddddff); d.position.set(x,.22,lz); world.add(d);
       }
     }
-    // Solid white edges
-    [-hw,hw].forEach(dz=>{
-      const e=box(300,.12,.22,0xffffff); e.position.set(0,.22,z+dz); world.add(e);
-      solidLines.push({type:'edge_ew',z:z+dz,hw:150,dir});
-    });
-    // Directional arrows per lane
-    for(let l=0;l<C.MAJ_LANES;l++){
-      const lx=dir>0?-80:80;
-      const lz=z-hw+(l+.5)*lw;
-      buildArrow(lx,.22,lz,dir>0?0:Math.PI,.7);
-    }
+    // Solid white outer edges only (no inner — median is yellow)
+    const outerZ = z + (dir>0?-hw:hw); // outermost edge away from median
+    const outerLine=box(ewLen,.13,.22,0xffffff); outerLine.position.set(ewCx,.23,outerZ); world.add(outerLine);
   });
 
-  // Yellow divider between paired roads (NO STOPPING)
-  const yk=box(300,.28,.55,0xf5c400); yk.position.set(0,.22,C.MAJ_MID_Z); world.add(yk);
-  yellowKerbs.push({x:0,z:C.MAJ_MID_Z,hw:150,hd:.9,noStop:true});
+  // Yellow median (solid — no crossing)
+  const yk=box(ewLen,.34,.72,0xf5c400); yk.position.set(ewCx,.24,C.MAJ_MID_Z); world.add(yk);
+  yellowKerbs.push({x:ewCx,z:C.MAJ_MID_Z,hw:ewLen/2,hd:.55,noStop:true,isMedian:true});
 
-  // -- NORTH-SOUTH ONE-WAY PAIR --
+  // ── CENTRAL RESERVE U-TURN GAPS (logic only, no visual clutter) ──
+  [-100,-40,-10].forEach(gx=>{
+    yieldSigns.push({x:gx,z:C.MAJ_MID_Z,r:5,isUTurnGap:true});
+  });
+
+  // ── NS ONE-WAY DUAL CARRIAGEWAY ──────────────────────────────
   [{x:C.MAJ_LEFT_X,dir:-1},{x:C.MAJ_RIGHT_X,dir:1}].forEach(({x,dir})=>{
     const r=box(C.MAJ_W,.2,300,RC); r.position.set(x,.1,0); world.add(r);
     for(let l=1;l<C.MAJ_LANES;l++){
       const lx=x-hw+l*lw;
-      for(let z=-140;z<140;z+=8){
-        const d=box(.18,.12,4,0xeeeeff); d.position.set(lx,.22,z); world.add(d);
+      for(let z=-130;z<130;z+=8){
+        const d=box(.18,.12,4,0xddddff); d.position.set(lx,.22,z); world.add(d);
       }
     }
-    [-hw,hw].forEach(dx=>{
-      const e=box(.22,.12,300,0xffffff); e.position.set(x+dx,.22,0); world.add(e);
-      solidLines.push({type:'edge_ns',x:x+dx,hd:150,dir});
-    });
+    // Outer solid edge only
+    const outerX=x+(dir>0?hw:-hw);
+    const outerEdge=box(.22,.13,300,0xffffff); outerEdge.position.set(outerX,.23,0); world.add(outerEdge);
   });
 
-  // Yellow divider NS roads
-  const ykns=box(.55,.28,300,0xf5c400); ykns.position.set((C.MAJ_LEFT_X+C.MAJ_RIGHT_X)/2,.22,0); world.add(ykns);
-  yellowKerbs.push({x:(C.MAJ_LEFT_X+C.MAJ_RIGHT_X)/2,z:0,hw:.9,hd:150,noStop:true});
+  // Yellow median NS
+  const jxNS=(C.MAJ_LEFT_X+C.MAJ_RIGHT_X)/2; // -63
+  const ykns=box(.65,.34,300,0xf5c400); ykns.position.set(jxNS,.24,0); world.add(ykns);
+  yellowKerbs.push({x:jxNS,z:0,hw:.55,hd:150,noStop:true,isMedian:true});
 
-  // Main intersection fill
-  const jx=(C.MAJ_LEFT_X+C.MAJ_RIGHT_X)/2;
-  const junc=box(C.MAJ_W+4,.2,C.MAJ_W+4,RC); junc.position.set(jx,.12,C.MAJ_MID_Z); world.add(junc);
+  // EW-NS intersection box
+  const junc=box(C.MAJ_W+2,.22,C.MAJ_W*2+2,RC);
+  junc.position.set(jxNS,.13,C.MAJ_MID_Z); world.add(junc);
 
-  // Zebra crossings at intersection
-  buildZebra(jx-12,C.MAJ_MID_Z,'ns');  // crossing NS road
-  buildZebra(jx,C.MAJ_MID_Z+12,'ew'); // crossing EW road
+  // Zebra crossings on EW road — BEFORE the NS intersection, 8u west of junction
+  // Perpendicular to EW direction (crossing is N-S oriented = 'ns' axis)
+  // Width = full dual carriageway span = 28u (both carriageways together)
+  const zbX = jxNS - hw - 8;
+  buildZebra(zbX, C.MAJ_MID_Z, 'ns', C.MAJ_W*2); // spans upper+lower EW roads
 }
 
 function buildArrow(x,y,z,rot,s=1){
-  const stem=box(.28*s,.12,2*s,0xdddddd); stem.position.set(x,y,z); stem.rotation.y=rot; world.add(stem);
-  const head=box(1.0*s,.12,.45*s,0xdddddd); head.position.set(x,y,z-1*s); head.rotation.y=rot; world.add(head);
+  // Arrows kept as no-ops to avoid breaking call sites; road surface stays clean
 }
 
 // -- MINOR ROADS ----------------------------------------------
 function buildMinorRoads(){
   const RC=0x252a32, hw=C.MIN_W/2, lw=C.MIN_LW;
 
-  // Horizontal minor (two-way)
-  const mh=box(200,.2,C.MIN_W,RC); mh.position.set(0,.1,C.MIN_H_Z); world.add(mh);
-  // Yellow CONTINUOUS centre line = wall
-  const ycl=box(200,.14,.28,0xf5c400); ycl.position.set(0,.22,C.MIN_H_Z); world.add(ycl);
-  yellowKerbs.push({x:0,z:C.MIN_H_Z,hw:100,hd:.5,isYellowLine:true,isCentreLine:true});
-  // White lane dividers (broken)
-  [-.5,.5].forEach(side=>{
+  // Minor H road starts just east of NS major road right edge
+  // NS major right road: centred at x=C.MAJ_RIGHT_X=-56, half-width=C.MAJ_W/2=7
+  // So minor H starts at x = -56+7+1 = -48
+  const mhLeft=C.MAJ_RIGHT_X+C.MAJ_W/2+1;   // -48
+  // Minor H road ends at x=100 (or where we want)
+  const mhRight=100;
+  const mhLen=mhRight-mhLeft;
+  const mhCx=(mhLeft+mhRight)/2;
+
+  const mh=box(mhLen,.2,C.MIN_W,RC); mh.position.set(mhCx,.1,C.MIN_H_Z); world.add(mh);
+  // Yellow continuous centre line (two-way divider)
+  const ycl=box(mhLen,.15,.28,0xf5c400); ycl.position.set(mhCx,.22,C.MIN_H_Z); world.add(ycl);
+  yellowKerbs.push({x:mhCx,z:C.MIN_H_Z,hw:mhLen/2,hd:.4,isYellowLine:true,isCentreLine:true});
+  // Broken lane dividers (one each half, skip minor-V junction zone)
+  [-1,1].forEach(side=>{
     const lz=C.MIN_H_Z+side*lw;
-    if(Math.abs(lz-C.MIN_H_Z)<.1)return;
-    for(let x=-95;x<95;x+=7){const d=box(3.5,.12,.18,0xdddddd);d.position.set(x,.22,lz);world.add(d);}
+    for(let x=mhLeft+3;x<mhRight-2;x+=7){
+      if(Math.abs(x-C.MIN_V_X)<lw*1.5)continue; // gap at T-junction
+      const d=box(3.5,.12,.18,0xdddddd); d.position.set(x,.22,lz); world.add(d);
+    }
   });
   // Solid edges
-  [-hw,hw].forEach(dz=>{const e=box(200,.12,.22,0xffffff);e.position.set(0,.22,C.MIN_H_Z+dz);world.add(e);});
-  // Zigzag no-stop zones near junctions
-  buildZigzag(-55,C.MIN_H_Z,'ew'); buildZigzag(45,C.MIN_H_Z,'ew');
-
-  // Vertical minor (two-way)
-  const mv=box(C.MIN_W,.2,200,RC); mv.position.set(C.MIN_V_X,.1,0); world.add(mv);
-  const ycv=box(.28,.14,200,0xf5c400); ycv.position.set(C.MIN_V_X,.22,0); world.add(ycv);
-  yellowKerbs.push({x:C.MIN_V_X,z:0,hw:.5,hd:100,isYellowLine:true,isCentreLine:true});
-  [-hw,hw].forEach(dx=>{const e=box(.22,.12,200,0xffffff);e.position.set(C.MIN_V_X+dx,.22,0);world.add(e);});
-
-  // STOP signs at T-junctions (minor joining two-way)
-  [{x:-55,z:C.MIN_H_Z,rot:0},{x:C.MIN_V_X,z:50,rot:Math.PI}].forEach(sp=>{
-    world.add(buildStopSignPost(sp.x+3,sp.z+3,sp.rot));
-    stopSigns.push({x:sp.x,z:sp.z,r:10,stopHeld:0,triggered:false,passed:false});
-    // Stop line
-    const sl=box(C.MIN_W,.13,.3,0xffffff); sl.position.set(sp.x,.22,sp.z+(sp.rot===0?-5:5)); world.add(sl);
+  [-hw,hw].forEach(dz=>{
+    const e=box(mhLen,.12,.22,0xffffff); e.position.set(mhCx,.22,C.MIN_H_Z+dz); world.add(e);
   });
 
-  // GIVE WAY / YIELD at minor-major junctions
-  [{x:-63,z:C.MIN_H_Z-8,rot:0},{x:C.MIN_V_X,z:C.MAJ_MID_Z+8,rot:Math.PI}].forEach(yp=>{
-    world.add(buildYieldSign(yp.x,yp.z,yp.rot));
-    yieldSigns.push({x:yp.x,z:yp.z,r:14});
-    // Broken transverse lines
-    for(let i=-2;i<=2;i++){
-      const yl=box(C.MIN_W,.13,.22,0xffffff);
-      yl.position.set(yp.x,.22,yp.z+(i*.6)+(yp.rot===0?-1:1));
-      world.add(yl);
+  // Minor V road (x=40) runs from below EW lower major road down to z=80
+  // EW lower road: centred at z=C.MAJ_LOWER_Z=-36, hw=7 -> bottom edge z=-29
+  const mvTop=C.MAJ_LOWER_Z+C.MAJ_W/2+1;  // -28
+  const mvBot=80;
+  const mvLen=mvBot-mvTop;
+  const mvCz=(mvTop+mvBot)/2;
+
+  const mv=box(C.MIN_W,.2,mvLen,RC); mv.position.set(C.MIN_V_X,.1,mvCz); world.add(mv);
+  const ycv=box(.28,.15,mvLen,0xf5c400); ycv.position.set(C.MIN_V_X,.22,mvCz); world.add(ycv);
+  yellowKerbs.push({x:C.MIN_V_X,z:mvCz,hw:.4,hd:mvLen/2,isYellowLine:true,isCentreLine:true});
+  [-hw,hw].forEach(dx=>{
+    const e=box(.22,.12,mvLen,0xffffff); e.position.set(C.MIN_V_X+dx,.22,mvCz); world.add(e);
+  });
+  // Broken lane dividers
+  [-1,1].forEach(side=>{
+    const lx=C.MIN_V_X+side*lw;
+    for(let z=mvTop+3;z<mvBot-2;z+=7){
+      if(Math.abs(z-C.MIN_H_Z)<lw*1.5)continue; // gap at T-junction
+      const d=box(.18,.12,3.5,0xdddddd); d.position.set(lx,.22,z); world.add(d);
     }
   });
 
-  // Zebra crossings on minor roads
-  buildZebra(0,C.MIN_H_Z-8,'ew');
-  buildZebra(C.MIN_V_X,20,'ns');
+  // Minor H/V T-junction fill
+  const tj=box(C.MIN_W+1,.2,C.MIN_W+1,RC);
+  tj.position.set(C.MIN_V_X,.11,C.MIN_H_Z); world.add(tj);
 
-  // NO ENTRY on wrong-way entries
-  [{x:-63,z:C.MAJ_UPPER_Z-5,rot:0}].forEach(ne=>{
-    world.add(buildNoEntrySign(ne.x,ne.z));
-    noEntryZones.push({x:ne.x,z:ne.z,r:8,dir:'wrong_east'});
-  });
+  // Stop signs
+  // Minor H entering NS major road (from east):
+  world.add(buildStopSignPost(mhLeft+1,C.MIN_H_Z+hw+1.5,0));
+  stopSigns.push({x:mhLeft+4,z:C.MIN_H_Z,r:8,stopHeld:0,passed:false});
+  const sl1=box(C.MIN_W,.13,.3,0xffffff); sl1.position.set(mhLeft+3,.22,C.MIN_H_Z); world.add(sl1);
+  // Minor V entering minor H (from north):
+  world.add(buildStopSignPost(C.MIN_V_X+hw+1.5,C.MIN_H_Z-6,Math.PI/2));
+  stopSigns.push({x:C.MIN_V_X,z:C.MIN_H_Z-4,r:8,stopHeld:0,passed:false});
+  const sl2=box(.3,.13,C.MIN_W,0xffffff); sl2.position.set(C.MIN_V_X,.22,C.MIN_H_Z-3); world.add(sl2);
+
+  // Zigzag no-stop zones
+  buildZigzag(mhLeft+6,C.MIN_H_Z,'ew');
+  buildZigzag(C.MIN_V_X,C.MIN_H_Z+6,'ns');
+
+  // Zebra crossings - full road width, at least 15u from junctions
+  // On minor H road: 18u east of NS major road
+  buildZebra(mhLeft+18,C.MIN_H_Z,'ew',C.MIN_W);
+  // On minor V road: 18u below EW lower major road
+  buildZebra(C.MIN_V_X,mvTop+18,'ns',C.MIN_W);
+  // Store minor road bounds for parking reference
+  C._mhLeft=mhLeft; C._mvTop=mvTop; C._mhBot=C.MIN_H_Z+hw; C._mvRight=C.MIN_V_X+hw;
 }
 
 function buildZigzag(x,z,axis){
@@ -517,159 +572,396 @@ function buildZigzag(x,z,axis){
 }
 
 // -- ZEBRA CROSSINGS ------------------------------------------
-function buildZebra(cx,cz,axis){
-  const roadW = axis==='ew' ? C.MAJ_W : C.MIN_W;
-  const stripes=7;
-  for(let i=0;i<stripes;i++){
+// roadW: actual width to span. axis: 'ew' (ped walks along x) or 'ns' (along z)
+// buildZebra: places a 2u-wide zebra crossing perpendicular to the road.
+// axis: direction the ROAD runs ('ew'=road goes east-west, peds cross N-S, stripes along EW)
+//       ('ns'=road goes north-south, peds cross E-W, stripes along NS)
+// roadW: total width to span.
+// The crossing is EXACTLY 2u deep (in the direction of travel).
+function buildZebra(cx,cz,axis,roadW){
+  roadW=roadW||C.MAJ_W;
+  const DEPTH=2.0;        // 2u wide in direction of travel
+  const STRIPE=0.5;       // each black/white stripe is 0.5u
+  const nStripes=Math.round(roadW/STRIPE);
+  for(let i=0;i<nStripes;i++){
     const even=i%2===0;
-    const s = axis==='ew'
-      ? box(roadW,.16,.7,even?0xeeeeee:0x1e2228)
-      : box(.7,.16,roadW,even?0xeeeeee:0x1e2228);
-    s.position.set(axis==='ew'?cx:cx+(i-.5)*1.0,
-                   .23,
-                   axis==='ew'?cz+(i-stripes/2)*1.0:cz);
-    world.add(s);
+    const col=even?0xeeeeee:0x333333;
+    const offset=-roadW/2+(i+.5)*STRIPE;
+    if(axis==='ew'){
+      // Road runs EW, crossing traverses NS (stripes run EW, stacked NS)
+      const s=box(STRIPE,.18,DEPTH,col);
+      s.position.set(cx+offset,.24,cz); world.add(s);
+    } else {
+      // Road runs NS, crossing traverses EW (stripes run NS, stacked EW)
+      const s=box(DEPTH,.18,STRIPE,col);
+      s.position.set(cx,.24,cz+offset); world.add(s);
+    }
   }
-  // Stop line (solid white, broad)
-  const sl=axis==='ew'
-    ? box(roadW,.14,.45,0xffffff)
-    : box(.45,.14,roadW,0xffffff);
-  sl.position.set(axis==='ew'?cx:cx,
-                  .23,
-                  axis==='ew'?cz-roadW*.6:cz-roadW*.6);
-  world.add(sl);
-
-  // Detection zone (invisible logic zone stored)
-  const zdat={
-    cx, cz, axis,
-    w: axis==='ew'?roadW:3, d: axis==='ew'?3:roadW,
-    activePeds:[],
-    carWaiting:false
-  };
-  zebras.push(zdat);
+  // Stop line: 0.4u thick white bar at far edge of crossing (approach side)
+  if(axis==='ew'){
+    const sl=box(roadW,.15,.4,0xffffff); sl.position.set(cx,.26,cz+DEPTH/2+.3); world.add(sl);
+  } else {
+    const sl=box(.4,.15,roadW,0xffffff); sl.position.set(cx+DEPTH/2+.3,.26,cz); world.add(sl);
+  }
+  // Logic zone (2u deep)
+  zebras.push({cx,cz,axis,roadW, w:DEPTH, d:DEPTH, pedPhase:'wait'});
 }
 
 // -- ROUNDABOUT -----------------------------------------------
+//
+// Centre: (65,-43). Inner radius=12, Outer radius=24. 4 lanes, 3u each.
+// Lane centres from ring centre: 13.5, 16.5, 19.5, 22.5
+//
+// ARMS — each arm is a road connector from ring edge outward:
+//
+//  W arm (a=π): spans the FULL dual carriageway width = 28u
+//    Centreline z=-43, half-width=14u -> covers z=-57 to z=-29
+//    Upper EW road (z=-57..-43) and lower EW road (z=-43..-29) both fit.
+//    Arm surface is 28u wide, extending outward from ring until EW roads pick up.
+//    Lane dividers on arm mirror the EW road lanes.
+//
+//  E arm (a=0):   14u wide, exits east
+//  N arm (a=-π/2): 14u wide, exits north  
+//  S arm (a=+π/2): 14u wide, extends south 50u to minor H road at z=+30
+//
+// ap(a,d,s): world coord on arm angle 'a', dist d from ring edge, lateral s.
+//   fwd = (cosA, sinA), left-perp = (-sinA, cosA)
+//   x = cx + cosA*(OR+d) + (-sinA)*s
+//   z = cz + sinA*(OR+d) + ( cosA)*s
+
 function buildRoundabout(){
   const {RDT_X:cx,RDT_Z:cz,RDT_OUTER:oR,RDT_INNER:iR}=C;
-  // 4 lanes: iR=12, oR=24 -> laneW=3 each
-  // Lane centres: 13.5, 16.5, 19.5, 22.5
-  const laneW=(oR-iR)/4; // 3 units per lane
+  const laneW=(oR-iR)/4;  // 3u per lane
+  const hw=C.MAJ_W/2;     // 7u = half of one carriageway
 
-  // Road ring surface
-  const geo=new THREE.RingGeometry(iR,oR,64);
-  const mesh=new THREE.Mesh(geo,mat(0x1e2228,{side:THREE.DoubleSide}));
-  mesh.rotation.x=-Math.PI/2; mesh.position.set(cx,.15,cz); world.add(mesh);
-
-  // Inner island
-  const island=cyl(iR,iR,.5,64,0x2d7020); island.position.set(cx,.22,cz); world.add(island);
-  // Island kerb ring (white)
-  const ikGeo=new THREE.RingGeometry(iR-.05,iR+.3,64);
-  const ik=new THREE.Mesh(ikGeo,mat(0xffffff,{side:THREE.DoubleSide}));
-  ik.rotation.x=-Math.PI/2; ik.position.set(cx,.26,cz); world.add(ik);
-
-  // Trees on island
-  for(let a=0;a<Math.PI*2;a+=Math.PI*.7){
-    const t=cyl(.4,.5,2.5,8,0x5c3d1e); t.position.set(cx+Math.cos(a)*7,1.25,cz+Math.sin(a)*7); world.add(t);
-    const c2=cyl(2.2,.4,4,8,0x2d7a2d); c2.position.set(cx+Math.cos(a)*7,4.5,cz+Math.sin(a)*7); world.add(c2);
+  function ap(a,d,s){
+    const cosA=Math.cos(a),sinA=Math.sin(a);
+    return {x:cx+cosA*(oR+d)+(-sinA)*s, z:cz+sinA*(oR+d)+(cosA)*s};
   }
 
-  // 4-lane dividers: 3 inner dividers + outer edge
-  // Divider radii: iR+laneW, iR+2*laneW, iR+3*laneW, oR
-  [iR+laneW, iR+2*laneW, iR+3*laneW, oR].forEach((r,i)=>{
-    const isDash = i < 3; // inner 3 are dashed (lane changes allowed on entry/exit)
-    if(isDash){
-      // Dashed lane divider
-      const segs=48;
-      for(let seg=0;seg<segs;seg+=2){
-        const a0=(seg/segs)*Math.PI*2;
-        const a1=((seg+0.8)/segs)*Math.PI*2;
-        const dashGeo=new THREE.RingGeometry(r-.09,r+.09,1,1,a0,a1-a0);
-        const dm=new THREE.Mesh(dashGeo,mat(0xffffff,{side:THREE.DoubleSide}));
-        dm.rotation.x=-Math.PI/2; dm.position.set(cx,.26,cz); world.add(dm);
-      }
-    } else {
-      // Solid outer edge ring
-      const rg=new THREE.RingGeometry(r-.12,r+.12,64);
-      const rm=new THREE.Mesh(rg,mat(0xffffff,{side:THREE.DoubleSide}));
-      rm.rotation.x=-Math.PI/2; rm.position.set(cx,.26,cz); world.add(rm);
+  // ── RING SURFACE ─────────────────────────────────────────────
+  {
+    const geo=new THREE.RingGeometry(iR,oR,72);
+    const m=new THREE.Mesh(geo,mat(0x1e2228,{side:THREE.DoubleSide}));
+    m.rotation.x=-Math.PI/2; m.position.set(cx,.15,cz); world.add(m);
+  }
+
+  // ── INNER ISLAND ─────────────────────────────────────────────
+  {
+    const isl=cyl(iR-.06,iR-.06,.7,64,0x2a6818);
+    isl.position.set(cx,.32,cz); world.add(isl);
+    const kg=new THREE.RingGeometry(iR-.18,iR+.2,72);
+    const km=new THREE.Mesh(kg,mat(0xffffff,{side:THREE.DoubleSide}));
+    km.rotation.x=-Math.PI/2; km.position.set(cx,.34,cz); world.add(km);
+    // Trees on island
+    for(let a=0;a<Math.PI*2;a+=Math.PI*.7){
+      const t=cyl(.26,.38,2.4,8,0x5c3d1e); t.position.set(cx+Math.cos(a)*5.8,1.2,cz+Math.sin(a)*5.8); world.add(t);
+      const c=cyl(1.7,.26,3.6,8,0x2d7a2d); c.position.set(cx+Math.cos(a)*5.8,3.9,cz+Math.sin(a)*5.8); world.add(c);
     }
+  }
+
+  // ── SOLID LANE DIVIDERS (no lane changes inside ring) ────────
+  [iR,iR+laneW,iR+2*laneW,iR+3*laneW,oR].forEach(r=>{
+    const g=new THREE.RingGeometry(r-.12,r+.12,72);
+    const m=new THREE.Mesh(g,mat(0xffffff,{side:THREE.DoubleSide}));
+    m.rotation.x=-Math.PI/2; m.position.set(cx,.33,cz); world.add(m);
   });
 
-  // Clockwise direction arrows in each lane
-  const laneCentres=[iR+laneW*.5, iR+laneW*1.5, iR+laneW*2.5, iR+laneW*3.5];
-  laneCentres.forEach(r=>{
-    for(let a=0;a<Math.PI*2;a+=Math.PI/4){
-      const ar=box(.22,.12,1.4,0x555566);
-      ar.position.set(cx+Math.cos(a)*r,.26,cz+Math.sin(a)*r);
-      // Clockwise tangent direction: angle - PI/2
+  // ── CLOCKWISE ARROWS ─────────────────────────────────────────
+  [iR+laneW*.5,iR+laneW*1.5,iR+laneW*2.5,iR+laneW*3.5].forEach(r=>{
+    for(let a=0;a<Math.PI*2;a+=Math.PI/2.2){
+      const ar=box(.13,.12,.85,0x44446a);
+      ar.position.set(cx+Math.cos(a)*r,.33,cz+Math.sin(a)*r);
       ar.rotation.y=a-Math.PI/2; world.add(ar);
     }
   });
 
-  // Entry/exit roads at 4 cardinal points
-  [0,Math.PI/2,Math.PI,Math.PI*1.5].forEach(a=>{
-    // Approach road fill
-    const fill=box(C.MAJ_W,.2,8,0x1e2228);
-    fill.rotation.y=a;
-    fill.position.set(cx+Math.cos(a)*(oR+4),.1,cz+Math.sin(a)*(oR+4));
-    world.add(fill);
+  // ── ISLAND DIRECTIONAL SIGNS (facing each approach) ──────────
+  [Math.PI,-Math.PI/2,Math.PI/2,0].forEach(a=>{
+    const cosA=Math.cos(a),sinA=Math.sin(a);
+    const sx=cx+cosA*(iR-2),sz=cz+sinA*(iR-2);
+    const pole=cyl(.07,.07,3,8,0x777777); pole.position.set(sx,1.5,sz); world.add(pole);
+    const disc=cyl(.48,.48,.1,20,0x003399); disc.rotation.x=Math.PI/2; disc.position.set(sx,3.4,sz); world.add(disc);
+    const rg=new THREE.RingGeometry(.18,.30,12,1,0,Math.PI*1.45);
+    const rm=new THREE.Mesh(rg,mat(0xffffff,{side:THREE.DoubleSide}));
+    rm.rotation.x=-Math.PI/2; rm.position.set(sx,3.5,sz); world.add(rm);
+  });
 
-    // Yield cones at entry
-    const cone=cyl(.28,0,1.1,6,0xff4400);
-    cone.position.set(cx+Math.cos(a)*(oR+3),.55,cz+Math.sin(a)*(oR+3)); world.add(cone);
+  // ═══════════════════════════════════════════════════════════════
+  // W ARM — 28u wide, bridges both EW dual carriageways
+  // Centreline z=-43, spans z=-57 to z=-29
+  // ═══════════════════════════════════════════════════════════════
+  {
+    const a=Math.PI;
+    const cosA=Math.cos(a),sinA=Math.sin(a); // cosA=-1, sinA=0
+    const W_HW=hw*2;  // 14u half-width (28u total) covering both carriageways
+    const ARM_LEN=22; // outward from ring edge
 
-    // Yield sign
-    world.add(buildYieldSign(cx+Math.cos(a)*(oR+5.5),cz+Math.sin(a)*(oR+5.5),a+Math.PI));
-    yieldSigns.push({x:cx+Math.cos(a)*(oR+5.5),z:cz+Math.sin(a)*(oR+5.5),r:10,isRoundabout:true});
+    // Road slab: extends from ring centre outward (fills ring gap too)
+    const extLen=ARM_LEN+oR;
+    const armCx=cx+cosA*(oR+ARM_LEN/2-oR/2);
+    const armCz=cz; // centred on median z=-43
+    const armSurf=box(extLen,.22,W_HW*2,0x1e2228);
+    armSurf.rotation.y=a; armSurf.position.set(armCx,.11,armCz); world.add(armSurf);
 
-    // Broken yield transverse lines at entry
-    for(let i=-1;i<=1;i+=2){
-      const yline=box(.35,.13,1.6,0xffffff);
-      yline.position.set(
-        cx+Math.cos(a)*(oR+.8)+Math.cos(a+Math.PI/2)*i*2,.26,
-        cz+Math.sin(a)*(oR+.8)+Math.sin(a+Math.PI/2)*i*2
-      );
-      yline.rotation.y=a+Math.PI/2; world.add(yline);
+    // Lane dividers on W arm — mirror EW upper (eastbound) lanes above median
+    // and EW lower (westbound) lanes below median.
+    // Upper EW (eastbound, z=-57 to -43): lane dividers between L1-L4
+    //   L1-L2 boundary: z=-53.5 | L2-L3: z=-50 | L3-L4: z=-46.5
+    // Lower EW (westbound, z=-43 to -29): mirror of upper
+    //   L1-L2: z=-32.5 | L2-L3: z=-36 | L3-L4: z=-39.5
+    // Yellow median stripe at z=-43 (already in W arm road centre)
+
+    // Upper half broken lane dividers
+    [{lz:C.MAJ_UPPER_Z-C.MAJ_W/2+C.MAJ_LW},   // -53.5
+     {lz:C.MAJ_UPPER_Z-C.MAJ_W/2+2*C.MAJ_LW}, // -50
+     {lz:C.MAJ_UPPER_Z-C.MAJ_W/2+3*C.MAJ_LW}, // -46.5
+    ].forEach(({lz})=>{
+      for(let d=1;d<ARM_LEN-1;d+=4){
+        const dm=box(.13,.14,1.6,0xddddff);
+        dm.position.set(cx+cosA*(oR+d+1.5),.27,lz); world.add(dm);
+      }
+    });
+    // Lower half broken lane dividers (mirrored)
+    [{lz:C.MAJ_LOWER_Z+C.MAJ_W/2-C.MAJ_LW},   // -32.5
+     {lz:C.MAJ_LOWER_Z+C.MAJ_W/2-2*C.MAJ_LW}, // -36
+     {lz:C.MAJ_LOWER_Z+C.MAJ_W/2-3*C.MAJ_LW}, // -39.5
+    ].forEach(({lz})=>{
+      for(let d=1;d<ARM_LEN-1;d+=4){
+        const dm=box(.13,.14,1.6,0xddddff);
+        dm.position.set(cx+cosA*(oR+d+1.5),.27,lz); world.add(dm);
+      }
+    });
+
+    // Yellow median continues on W arm
+    const med=box(ARM_LEN,.34,.65,0xf5c400);
+    med.position.set(cx+cosA*(oR+ARM_LEN/2),.25,C.MAJ_MID_Z); world.add(med);
+
+    // Solid outer edges (top z=-57, bottom z=-29)
+    [-W_HW,W_HW].forEach(s=>{
+      const el=box(ARM_LEN,.13,.22,0xffffff);
+      el.position.set(cx+cosA*(oR+ARM_LEN/2),.25,cz+s); world.add(el);
+    });
+
+    // Stop line at junction mouth: one across each carriageway
+    const slX=cx+cosA*(oR+0.8);
+    const sl1=box(.4,.16,C.MAJ_W,0xffffff);
+    sl1.position.set(slX,.27,C.MAJ_UPPER_Z); world.add(sl1);
+    const sl2=box(.4,.16,C.MAJ_W,0xffffff);
+    sl2.position.set(slX,.27,C.MAJ_LOWER_Z); world.add(sl2);
+
+    // Traffic lights at junction corners (outside road, on verge)
+    [C.MAJ_UPPER_Z-hw-1,C.MAJ_UPPER_Z+hw+1,C.MAJ_LOWER_Z-hw-1,C.MAJ_LOWER_Z+hw+1].forEach(tlZ=>{
+      buildTLSet(slX-1.5,tlZ,0); // face eastward
+    });
+
+    // Zebra crossing on W arm: 2u wide, perpendicular (NS) across each carriageway
+    // Placed 6u before junction mouth = at d=6 from ring edge
+    const zbX=cx+cosA*(oR+6);
+    buildZebra(zbX,C.MAJ_UPPER_Z,'ns',C.MAJ_W);
+    buildZebra(zbX,C.MAJ_LOWER_Z,'ns',C.MAJ_W);
+
+    // Yield sign on left verge at mouth
+    world.add(buildYieldSign(slX-1,C.MAJ_UPPER_Z-hw-2.5,Math.PI));
+    world.add(buildYieldSign(slX-1,C.MAJ_LOWER_Z+hw+2.5,Math.PI));
+    yieldSigns.push({x:slX,z:C.MAJ_UPPER_Z,r:hw*1.1,isRoundabout:true});
+    yieldSigns.push({x:slX,z:C.MAJ_LOWER_Z,r:hw*1.1,isRoundabout:true});
+
+    // Warning sign on verge furthest back
+    const warnX=cx+cosA*(oR+ARM_LEN-2);
+    buildWarnSign(warnX,C.MAJ_UPPER_Z-hw-2.5);
+    buildWarnSign(warnX,C.MAJ_LOWER_Z+hw+2.5);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // E / N / S ARMS — standard 14u wide
+  // ═══════════════════════════════════════════════════════════════
+  [
+    {a:0,          ARM_LEN:22, label:'E'},
+    {a:-Math.PI/2, ARM_LEN:26, label:'N'},
+    {a:Math.PI/2,  ARM_LEN:50, label:'S'},
+  ].forEach(({a,ARM_LEN,label})=>{
+    const cosA=Math.cos(a),sinA=Math.sin(a);
+
+    // Road slab extends under ring to eliminate edge gaps
+    const extLen=ARM_LEN+oR;
+    const armCx=cx+cosA*(oR+ARM_LEN/2-oR/2);
+    const armCz=cz+sinA*(oR+ARM_LEN/2-oR/2);
+    const surf=box(extLen,.22,C.MAJ_W,0x1e2228);
+    surf.rotation.y=a; surf.position.set(armCx,.11,armCz); world.add(surf);
+
+    // Outer solid edges
+    [-hw,hw].forEach(s=>{
+      const pt=ap(a,ARM_LEN/2,s);
+      const el=box(ARM_LEN,.13,.22,0xffffff);
+      el.rotation.y=a; el.position.set(pt.x,.25,pt.z); world.add(el);
+    });
+
+    // Broken lane dividers (3 dividers for 4 lanes)
+    [-C.MAJ_LW,0,C.MAJ_LW].forEach(s=>{
+      for(let d=4;d<ARM_LEN-1;d+=4){
+        const pt=ap(a,d+1.5,s);
+        const dm=box(.13,.14,1.8,0xddddff);
+        dm.rotation.y=a; dm.position.set(pt.x,.27,pt.z); world.add(dm);
+      }
+    });
+
+    // Stop line at junction mouth (d=0.5)
+    {
+      const slPt=ap(a,0.5,0);
+      const sl=box(C.MAJ_W+.3,.16,.48,0xffffff);
+      sl.rotation.y=a; sl.position.set(slPt.x,.27,slPt.z); world.add(sl);
     }
 
-    // Zebra crossing on approach
-    buildZebra(
-      cx+Math.cos(a)*(oR+9),
-      cz+Math.sin(a)*(oR+9),
-      Math.abs(Math.cos(a))>.7?'ew':'ns'
-    );
+    // Traffic lights at junction CORNERS — outside road (verge), not on road
+    {
+      const tlPt1=ap(a,0.5,-(hw+1.5));
+      const tlPt2=ap(a,0.5,(hw+1.5));
+      const tlRot=a+Math.PI/2;
+      buildTLSet(tlPt1.x,tlPt1.z,tlRot);
+      buildTLSet(tlPt2.x,tlPt2.z,tlRot);
+    }
+
+    // Zebra crossing — 2u wide, perpendicular to arm, at d=5
+    {
+      const zpt=ap(a,5,0);
+      const zbAxis=Math.abs(cosA)>.5?'ns':'ew'; // perpendicular to arm direction
+      buildZebra(zpt.x,zpt.z,zbAxis,C.MAJ_W);
+    }
+
+    // (Yield marks on road omitted — kept as logic-only via yieldSigns array)
+
+    // Yield sign on left verge at d=0.5
+    {
+      const gyPt=ap(a,0.5,-(hw+2.2));
+      world.add(buildYieldSign(gyPt.x,gyPt.z,a+Math.PI));
+      yieldSigns.push({x:ap(a,1,0).x,z:ap(a,1,0).z,r:hw*1.1,isRoundabout:true});
+    }
+
+    // Warning sign on left verge furthest back
+    {
+      const wpt=ap(a,ARM_LEN-1,-(hw+2.5));
+      buildWarnSign(wpt.x,wpt.z);
+    }
+
+    // S arm special: extend to minor H road and add junction box
+    if(label==='S'){
+      const minHSouth=C.MIN_H_Z+C.MIN_W/2;
+      const armSouthEnd=cz+oR+ARM_LEN; // z = -43+24+50 = 31
+      // Junction box where S arm meets minor H road
+      const jbox=box(C.MAJ_W,.22,C.MIN_W+1,0x1e2228);
+      jbox.position.set(cx,.13,C.MIN_H_Z); world.add(jbox);
+    }
   });
+}
+
+// Helper: warning diamond sign
+function buildWarnSign(x,z){
+  const pole=cyl(.07,.07,2.9,8,0x888888); pole.position.set(x,1.45,z); world.add(pole);
+  const sgn=box(.94,.94,.1,0xf5c400); sgn.position.set(x,3.2,z); sgn.rotation.y=Math.PI/4; world.add(sgn);
+  const inn=box(.60,.60,.12,0x1a1200); inn.position.set(x,3.2,z); inn.rotation.y=Math.PI/4; world.add(inn);
 }
 
 // -- PARKING LOTS ---------------------------------------------
 function buildParkingLots(){
-  // ANGLE PARKING -- enter forward (D), exit reverse (R)
-  const ap={x:-88,z:52,w:44,d:16,bays:8};
-  const apLot=box(ap.w,.2,ap.d,0x252830); apLot.position.set(ap.x,.12,ap.z); world.add(apLot);
-  const bw=ap.w/ap.bays;
-  for(let i=0;i<=ap.bays;i++){
-    const l=box(.15,.13,ap.d,0xffffff); l.position.set(ap.x-ap.w/2+i*bw,.22,ap.z); world.add(l);
-  }
-  // Angled bay lines
-  for(let i=0;i<ap.bays;i++){
-    const la=box(.14,.13,6.5,0x888888); la.rotation.y=Math.PI/6;
-    la.position.set(ap.x-ap.w/2+(i+.5)*bw,.22,ap.z); world.add(la);
-  }
-  buildParkSign(ap.x,ap.z-ap.d/2-2,'ANGLE','D IN · R OUT');
-  // Yellow kerb at entry/exit
-  const yk1=box(ap.w+4,.28,.55,0xf5c400); yk1.position.set(ap.x,.22,ap.z-ap.d/2-.6); world.add(yk1);
-  yellowKerbs.push({x:ap.x,z:ap.z-ap.d/2-.6,hw:ap.w/2+2,hd:.9,noStop:true});
-  parkingZones.push({type:'angle',x:ap.x,z:ap.z,hw:ap.w/2,hd:ap.d/2,entryG:'D',exitG:'R'});
+  // Compute safe south edge of minor H road
+  const roadSouth=C.MIN_H_Z+C.MIN_W/2;  // ~34.8
+  const lotTop=roadSouth+3;              // 37.8 -> lots start at z~38
 
-  // PARALLEL / FLASH PARKING -- enter reverse (R), exit forward (D)
-  const pp={x:44,z:60,w:60,d:7,bays:8};
-  const ppLot=box(pp.w,.2,pp.d,0x252830); ppLot.position.set(pp.x,.12,pp.z); world.add(ppLot);
-  const bw2=pp.w/pp.bays;
-  for(let i=0;i<=pp.bays;i++){const l=box(.15,.13,pp.d,0xffffff);l.position.set(pp.x-pp.w/2+i*bw2,.22,pp.z);world.add(l);}
-  [-pp.d/2,pp.d/2].forEach(dz=>{const sl=box(pp.w,.13,.2,0xffffff);sl.position.set(pp.x,.22,pp.z+dz);world.add(sl);});
-  buildParkSign(pp.x,pp.z-pp.d/2-2,'PARALLEL','R IN · D OUT');
-  parkingZones.push({type:'parallel',x:pp.x,z:pp.z,hw:pp.w/2,hd:pp.d/2,entryG:'R',exitG:'D'});
+  // ANGLE PARKING east of minor V road (x=40+half_w+1=46 minimum)
+  // x centre: (46+86)/2=66, width=40 -> x=46..86
+  const ap={cx:66,cz:lotTop+8,hw:20,hd:8,bays:8};
+  const apLot=box(ap.hw*2,.2,ap.hd*2,0x252830);
+  apLot.position.set(ap.cx,.12,ap.cz); world.add(apLot);
+  // Access road connecting lot to minor H road
+  const accH1=ap.hd*2; // lot depth
+  const accLen1=ap.cz-ap.hd-lotTop;
+  if(accLen1>0){
+    const acc=box(ap.hw*2,.18,accLen1,0x1e2228);
+    acc.position.set(ap.cx,.1,lotTop+accLen1/2); world.add(acc);
+  }
+  // Bay lines
+  const bw1=(ap.hw*2)/ap.bays;
+  for(let i=0;i<=ap.bays;i++){
+    const l=box(.14,.13,ap.hd*2,0xffffff);
+    l.position.set(ap.cx-ap.hw+i*bw1,.22,ap.cz); world.add(l);
+  }
+  // Angled bay markers
+  for(let i=0;i<ap.bays;i++){
+    const la=box(.12,.13,6,0x888888); la.rotation.y=Math.PI/6;
+    la.position.set(ap.cx-ap.hw+(i+.5)*bw1,.22,ap.cz); world.add(la);
+  }
+  buildParkSign(ap.cx,ap.cz-ap.hd-1.5,'ANGLE','D IN R OUT');
+  // Yellow no-stop kerb at lot entrance
+  const yk1=box(ap.hw*2+2,.26,.48,0xf5c400);
+  yk1.position.set(ap.cx,.22,ap.cz-ap.hd-.5); world.add(yk1);
+  yellowKerbs.push({x:ap.cx,z:ap.cz-ap.hd-.5,hw:ap.hw+1,hd:.7,noStop:true});
+  parkingZones.push({type:'angle',x:ap.cx,z:ap.cz,hw:ap.hw,hd:ap.hd,entryG:'D',exitG:'R'});
+
+  // EXIT ROAD from angle parking lot north edge → minor H road
+  // Lot north edge z = ap.cz - ap.hd = 46-8 = 38
+  // Minor H road south edge z = C.MIN_H_Z + C.MIN_W/2 = 30 + 4.8 = 34.8
+  // Exit road: full lot width, from z=34.8 to z=38 (3.2u gap)
+  {
+    const exitZ  = ap.cz - ap.hd;           // 38
+    const minHSouth = C.MIN_H_Z + C.MIN_W/2; // 34.8
+    const exitLen = exitZ - minHSouth;        // 3.2u
+    if(exitLen > 0){
+      const er=box(ap.hw*2,.2,exitLen,0x1e2228);
+      er.position.set(ap.cx,.1,minHSouth+exitLen/2); world.add(er);
+      // White edge lines on exit road
+      [-ap.hw, ap.hw].forEach(dx=>{
+        const el=box(.2,.12,exitLen,0xffffff);
+        el.position.set(ap.cx+dx,.22,minHSouth+exitLen/2); world.add(el);
+      });
+    }
+    // Give way line at junction with minor H road
+    const gwLine=box(ap.hw*2,.14,.4,0xffffff);
+    gwLine.position.set(ap.cx,.24,minHSouth+.3); world.add(gwLine);
+    // Yield sign at lot exit
+    world.add(buildYieldSign(ap.cx-ap.hw-2, minHSouth, Math.PI/2));
+  }
+
+  // PARALLEL PARKING west of minor V road (x=40-half_w-1=34.2 max right edge)
+  // x centre: (-30+14)/2=-8, width=44 -> x=-30..14 (right edge=14 < 35)
+  const pp={cx:-8,cz:lotTop+4,hw:22,hd:4,bays:7};
+  const ppLot=box(pp.hw*2,.2,pp.hd*2,0x252830);
+  ppLot.position.set(pp.cx,.12,pp.cz); world.add(ppLot);
+  const accLen2=pp.cz-pp.hd-lotTop;
+  if(accLen2>0){
+    const acc2=box(pp.hw*2,.18,accLen2,0x1e2228);
+    acc2.position.set(pp.cx,.1,lotTop+accLen2/2); world.add(acc2);
+  }
+  const bw2=(pp.hw*2)/pp.bays;
+  for(let i=0;i<=pp.bays;i++){
+    const l=box(.14,.13,pp.hd*2,0xffffff);
+    l.position.set(pp.cx-pp.hw+i*bw2,.22,pp.cz); world.add(l);
+  }
+  [-pp.hd,pp.hd].forEach(dz=>{
+    const sl=box(pp.hw*2,.12,.18,0xffffff);
+    sl.position.set(pp.cx,.22,pp.cz+dz); world.add(sl);
+  });
+  buildParkSign(pp.cx,pp.cz-pp.hd-1.5,'PARALLEL','R IN D OUT');
+  parkingZones.push({type:'parallel',x:pp.cx,z:pp.cz,hw:pp.hw,hd:pp.hd,entryG:'R',exitG:'D'});
+
+  // EXIT ROAD from parallel lot north edge → minor H road
+  {
+    const exitZ  = pp.cz - pp.hd;           // 38
+    const minHSouth = C.MIN_H_Z + C.MIN_W/2; // 34.8
+    const exitLen = exitZ - minHSouth;
+    if(exitLen > 0){
+      const er=box(pp.hw*2,.2,exitLen,0x1e2228);
+      er.position.set(pp.cx,.1,minHSouth+exitLen/2); world.add(er);
+      [-pp.hw, pp.hw].forEach(dx=>{
+        const el=box(.2,.12,exitLen,0xffffff);
+        el.position.set(pp.cx+dx,.22,minHSouth+exitLen/2); world.add(el);
+      });
+    }
+    // Give way line at minor H junction
+    const gwLine2=box(pp.hw*2,.14,.4,0xffffff);
+    gwLine2.position.set(pp.cx,.24,minHSouth+.3); world.add(gwLine2);
+    world.add(buildYieldSign(pp.cx+pp.hw+2, minHSouth, -Math.PI/2));
+  }
 }
 
 function buildParkSign(x,z,type,sub){
@@ -693,9 +985,15 @@ function buildEnvironment(){
     [-125,45],[-125,-45],[-125,5],[25,60],[45,60],[-12,60],
     [25,-70],[45,-70],[65,-70],[-5,50],[-5,-55]
   ].forEach(([x,z])=>addTree(x,z));
-  // Street lights
-  for(let x=-120;x<=120;x+=18){addSL(x,C.MAJ_UPPER_Z-6);addSL(x,C.MAJ_LOWER_Z+6);}
-  for(let z=-120;z<=120;z+=18){addSL(C.MAJ_LEFT_X-5,z);addSL(C.MAJ_RIGHT_X+5,z);}
+  // Street lights – on road VERGE, outside carriageway
+  // EW upper road: south verge (z < MAJ_UPPER_Z - hw = -57), use z=-58.5
+  // EW lower road: north verge (z > MAJ_LOWER_Z + hw = -29), use z=-27.5
+  const slu_z = C.MAJ_UPPER_Z - C.MAJ_W/2 - 1.5;   // -58.5 (south verge of upper EW)
+  const sll_z = C.MAJ_LOWER_Z + C.MAJ_W/2 + 1.5;   // -27.5 (north verge of lower EW)
+  const sll_x = C.MAJ_LEFT_X  - C.MAJ_W/2 - 1.5;   // -78.5 (west verge of left NS)
+  const slr_x = C.MAJ_RIGHT_X + C.MAJ_W/2 + 1.5;   // -47.5 (east verge of right NS)
+  for(let x=-120;x<=120;x+=20){addSL(x,slu_z);addSL(x,sll_z);}
+  for(let z=-120;z<=120;z+=20){addSL(sll_x,z);addSL(slr_x,z);}
 }
 function addTree(x,z){
   const t=cyl(.35,.46,3,8,0x5c3d1e); t.position.set(x,1.5,z); world.add(t);
@@ -707,20 +1005,36 @@ function addSL(x,z){
 }
 
 // -- SIGNS ----------------------------------------------------
+// Spec: signs planted on verges, pavements, or traffic island only.
+// Never inside the carriageway.
 function buildAllSigns(){
-  // MANDATORY -- KEEP LEFT signs on major road (blue circles)
-  [{x:-40,z:C.MAJ_UPPER_Z-7},{x:30,z:C.MAJ_UPPER_Z-7},{x:-40,z:C.MAJ_LOWER_Z+7},{x:30,z:C.MAJ_LOWER_Z+7}]
+  const hw=C.MAJ_W/2;
+
+  // ── KEEP LEFT mandatory signs on verge beside major roads ──
+  // Placed on the LEFT verge (south side of upper EW, north side of lower EW)
+  [{x:-50,z:C.MAJ_UPPER_Z-hw-2},{x:10,z:C.MAJ_UPPER_Z-hw-2},
+   {x:-50,z:C.MAJ_LOWER_Z+hw+2},{x:10,z:C.MAJ_LOWER_Z+hw+2}]
   .forEach(p=>world.add(buildMandatorySign(p.x,p.z,'KL')));
-  // NO U-TURN on major road (red circle)
-  [{x:-20,z:C.MAJ_UPPER_Z-7}].forEach(p=>{
-    world.add(buildNoUTurnSign(p.x,p.z)); noUTurnZones.push({x:p.x,z:p.z,r:10});
+
+  // ── NO U-TURN signs on verge ────────────────────────────────
+  [{x:-20,z:C.MAJ_UPPER_Z-hw-2}].forEach(p=>{
+    world.add(buildNoUTurnSign(p.x,p.z));
+    noUTurnZones.push({x:p.x,z:p.z,r:10});
   });
-  // Traffic lights at main intersection
-  const jx=(C.MAJ_LEFT_X+C.MAJ_RIGHT_X)/2;
-  buildTLSet(jx-10,C.MAJ_MID_Z-10, 0);
-  buildTLSet(jx+10,C.MAJ_MID_Z-10, Math.PI);
-  buildTLSet(jx-10,C.MAJ_MID_Z+10, 0);
-  buildTLSet(jx+10,C.MAJ_MID_Z+10, Math.PI);
+
+  // No-entry signs placed on left NS road verge (one-way)
+  // world.add(buildNoEntrySign(...)); // omit to keep roads clean
+
+  // ── TRAFFIC LIGHTS at main EW-NS intersection ───────────────
+  // Spec: at corners of junction (verge/pavement, outside carriageway)
+  // Junction centre: x=(MAJ_LEFT_X+MAJ_RIGHT_X)/2=-63, z=MAJ_MID_Z=-43
+  // Road half-width hw=7.  Place TLs 1.5u outside road edge at each corner.
+  const jx=(C.MAJ_LEFT_X+C.MAJ_RIGHT_X)/2;   // -63
+  const tlOff = hw + 1.5;                      // 8.5u from junction centre
+  buildTLSet(jx-tlOff, C.MAJ_MID_Z-tlOff, 0);        // SW corner (outside road)
+  buildTLSet(jx+tlOff, C.MAJ_MID_Z-tlOff, Math.PI);   // SE corner
+  buildTLSet(jx-tlOff, C.MAJ_MID_Z+tlOff, 0);         // NW corner
+  buildTLSet(jx+tlOff, C.MAJ_MID_Z+tlOff, Math.PI);   // NE corner
 }
 
 function buildTLSet(x,z,rot){
@@ -831,121 +1145,396 @@ function buildPlayerCar(color=0x1166ee){
 
 // -- AI TRAFFIC -----------------------------------------------
 const aiVehicles=[];
+
+// Lane centres for straight roads: leftmost (keep-left) lane first
+// MAJ_UPPER_Z=-50, MAJ_W=14, hw=7, lw=3.5
+// Lane 1 (left/keep-left): z = MAJ_UPPER_Z - hw + 0.5*lw = -50-7+1.75 = -55.25
+// Lane 2: -51.75  Lane 3: -48.25  Lane 4: -44.75
+// For upper (eastbound), Lane1 is southernmost (lowest z):
+//   lane 1 centre: MAJ_UPPER_Z - hw + 0.5*lw
+const majLW=C.MAJ_LW;
+function majLaneCentre(roadZ,lane){
+  return roadZ - C.MAJ_W/2 + (lane-.5)*majLW;
+}
+// Minor road (two-way), keep-left = lane 1 on each half
+// For eastbound on minor H: centre at MIN_H_Z - MIN_W/2 + 0.5*MIN_LW
+function minLaneCentre(roadZ,lane){
+  return roadZ - C.MIN_W/2 + (lane-.5)*C.MIN_LW;
+}
+
+// AI ROUTES — cars drive on roads, enter roundabout, exit, continue.
+// Route types:
+//   straight: pts[0]→pts[1], loops back
+//   rdt_through: enter roundabout at entry angle, drive CW specified arc, exit
+//
+// EW road boundaries: x=-130 to x=41 (rdtWest), x=89 (rdtEast) to x=130
+// Roundabout: cx=65, cz=-43, OR=24
+// Lane centres:
+//   EW upper (eastbound): L1=z-55.25, L2=-51.75, L3=-48.25, L4=-44.75
+//   EW lower (westbound): L1=z-30.75, L2=-34.25, L3=-37.75, L4=-41.25
+//   (lower westbound L1 = outermost = highest z)
+const RDT_W_MOUTH=C.RDT_X-C.RDT_OUTER; // 41
+const RDT_E_MOUTH=C.RDT_X+C.RDT_OUTER; // 89
+const RDT_N_MOUTH=C.RDT_Z-C.RDT_OUTER; // -67
+const RDT_S_MOUTH=C.RDT_Z+C.RDT_OUTER; // -19
+
+// rdt_through route: car enters ring at entryAng, drives CW by arcRad, exits at exitAng
+// Then continues on exitRoad (straight pts)
 const AI_ROUTES=[
-  {pts:[new THREE.Vector3(-140,.38,C.MAJ_UPPER_Z-5.25),new THREE.Vector3(140,.38,C.MAJ_UPPER_Z-5.25)],spd:9.5,loop:true},
-  {pts:[new THREE.Vector3(-140,.38,C.MAJ_UPPER_Z-1.75),new THREE.Vector3(140,.38,C.MAJ_UPPER_Z-1.75)],spd:11,loop:true},
-  {pts:[new THREE.Vector3(140,.38,C.MAJ_LOWER_Z+5.25),new THREE.Vector3(-140,.38,C.MAJ_LOWER_Z+5.25)],spd:10,loop:true},
-  {pts:[new THREE.Vector3(140,.38,C.MAJ_LOWER_Z+1.75),new THREE.Vector3(-140,.38,C.MAJ_LOWER_Z+1.75)],spd:8.5,loop:true},
-  // 4 roundabout AI lanes - centres at iR + laneW*0.5 steps
-  {rdt:true,cx:C.RDT_X,cz:C.RDT_Z,r:13.5,spd:4.2,lane:1}, // Lane 1 - outermost
-  {rdt:true,cx:C.RDT_X,cz:C.RDT_Z,r:16.5,spd:5.0,lane:2}, // Lane 2
-  {rdt:true,cx:C.RDT_X,cz:C.RDT_Z,r:19.5,spd:5.6,lane:3}, // Lane 3
-  {rdt:true,cx:C.RDT_X,cz:C.RDT_Z,r:22.5,spd:6.2,lane:4}, // Lane 4 - innermost
-  {pts:[new THREE.Vector3(-90,.38,C.MIN_H_Z+1),new THREE.Vector3(90,.38,C.MIN_H_Z+1)],spd:6.5,loop:true},
-  {pts:[new THREE.Vector3(90,.38,C.MIN_H_Z-1),new THREE.Vector3(-90,.38,C.MIN_H_Z-1)],spd:7,loop:true},
-  {pts:[new THREE.Vector3(C.MAJ_LEFT_X-5,.38,-120),new THREE.Vector3(C.MAJ_LEFT_X-5,.38,120)],spd:9,loop:true},
-  {pts:[new THREE.Vector3(C.MAJ_RIGHT_X+5,.38,120),new THREE.Vector3(C.MAJ_RIGHT_X+5,.38,-120)],spd:8,loop:true},
+  // ── EW upper eastbound, lane 1, looping on road (no roundabout) ──
+  {pts:[new THREE.Vector3(-130,.38,majLaneCentre(C.MAJ_UPPER_Z,1)),
+        new THREE.Vector3(RDT_W_MOUTH-2,.38,majLaneCentre(C.MAJ_UPPER_Z,1))],
+   spd:9.5,loop:true,homeLane:majLaneCentre(C.MAJ_UPPER_Z,1),axis:'x',maxLane:C.MAJ_LANES,laneW:majLW,roadRef:C.MAJ_UPPER_Z},
+
+  // ── EW lower westbound, lane 1, looping ──
+  {pts:[new THREE.Vector3(RDT_E_MOUTH+2,.38,majLaneCentre(C.MAJ_LOWER_Z,1)),
+        new THREE.Vector3(-130,.38,majLaneCentre(C.MAJ_LOWER_Z,1))],
+   spd:10,loop:true,homeLane:majLaneCentre(C.MAJ_LOWER_Z,1),axis:'x',maxLane:C.MAJ_LANES,laneW:majLW,roadRef:C.MAJ_LOWER_Z},
+
+  // ── ROUNDABOUT THROUGH-CARS ──
+  // These cars enter from the west arm on upper EW (lane 1), drive CW 180°,
+  // then exit via the east arm and continue east (opposite direction).
+  // Entry angle: approaching from west = angle PI (pointing east into ring from west arm)
+  // In ring: position = cx + cos(ang)*r, cz + sin(ang)*r
+  // West arm entry point at ring edge: (41, -55.25) for upper L1 → which ring angle?
+  //   dx=41-65=-24=cosA*r, dz=-55.25-(-43)=-12.25=sinA*r
+  //   For outermost ring lane (lane 4, r=22.5): ang=atan2(-12.25/22.5, -24/22.5) = atan2(-0.544,-1.067) ≈ PI+atan2(0.544,1.067) ≈ PI+0.473 ≈ -2.67 rad
+  // Simpler: we use rdt_through which handles entry/exit by angle
+  // Lane 1 (outermost, r=13.5): entry from west = angle near PI, exit east = angle near 0
+  // CW from PI to 0 = going PI→0 by decreasing angle (CW) = arc of PI radians (180°) = straight-through
+  {rdt_through:true, entryAng:Math.PI+0.3, arcRad:Math.PI, r:C.RDT_INNER+C.RDT_LANE_W*3.5,
+   enterLane:1, spd:5.5,
+   postRoad:{pts:[new THREE.Vector3(RDT_E_MOUTH+2,.38,majLaneCentre(C.MAJ_LOWER_Z,1)),
+                  new THREE.Vector3(130,.38,majLaneCentre(C.MAJ_LOWER_Z,1))],
+             spd:9,loop:false,homeLane:majLaneCentre(C.MAJ_LOWER_Z,1),axis:'x'}},
+
+  // Lane 2 (r=16.5) CW 180° west→east
+  {rdt_through:true, entryAng:Math.PI+0.18, arcRad:Math.PI, r:C.RDT_INNER+C.RDT_LANE_W*2.5,
+   enterLane:2, spd:5.0,
+   postRoad:{pts:[new THREE.Vector3(RDT_E_MOUTH+2,.38,majLaneCentre(C.MAJ_LOWER_Z,2)),
+                  new THREE.Vector3(130,.38,majLaneCentre(C.MAJ_LOWER_Z,2))],
+             spd:8.5,loop:false,homeLane:majLaneCentre(C.MAJ_LOWER_Z,2),axis:'x'}},
+
+  // ── Minor H road both directions ──
+  {pts:[new THREE.Vector3(-50,.38,minLaneCentre(C.MIN_H_Z,1)),
+        new THREE.Vector3(95,.38,minLaneCentre(C.MIN_H_Z,1))],
+   spd:6.5,loop:true,homeLane:minLaneCentre(C.MIN_H_Z,1),axis:'x',laneW:C.MIN_LW},
+
+  {pts:[new THREE.Vector3(95,.38,minLaneCentre(C.MIN_H_Z,3)),
+        new THREE.Vector3(-50,.38,minLaneCentre(C.MIN_H_Z,3))],
+   spd:7,loop:true,homeLane:minLaneCentre(C.MIN_H_Z,3),axis:'x',laneW:C.MIN_LW},
 ];
-const AICOLORS=[0xff2200,0x22aa44,0xffaa00,0x8844cc,0x00aaff,0xff6688,0x44ffcc,0xff8800,0xffffff,0x884422];
+const AICOLORS=[0xff3311,0x22aa44,0xffaa00,0x8844cc,0x00aaff,0xff6688,0x44ffcc,0xff8800,0xeeeeee,0x884422];
 
 function spawnAI(n){
   aiVehicles.forEach(v=>scene.remove(v.m)); aiVehicles.length=0;
-  // Track how many roundabout cars we have to stagger their start angles
-  let rdtCount=0;
   for(let i=0;i<Math.min(n,AI_ROUTES.length);i++){
     const rt=AI_ROUTES[i];
     const m=buildAiCar(AICOLORS[i%AICOLORS.length]);
-    let startAng=0;
-    if(rt.rdt){
-      // Stagger each roundabout car evenly so they never overlap at spawn
-      startAng=(rdtCount/4)*Math.PI*2;
-      rdtCount++;
-      // Lock position exactly on lane-centre radius
+    let startAng=0, startPr=0;
+    if(rt.rdt_through){
+      // Position at entry angle on the ring
+      startAng=rt.entryAng+(i%2)*Math.PI*0.5; // stagger
+      m.position.set(C.RDT_X+Math.cos(startAng)*rt.r,.38,C.RDT_Z+Math.sin(startAng)*rt.r);
+    } else if(rt.rdt){
+      startAng=(i/4)*Math.PI*2;
       m.position.set(rt.cx+Math.cos(startAng)*rt.r,.38,rt.cz+Math.sin(startAng)*rt.r);
     } else {
-      const pr=Math.random();
-      m.position.lerpVectors(rt.pts[0],rt.pts[1],pr);
+      startPr=i%2===0?0.05:0.55;
+      m.position.lerpVectors(rt.pts[0],rt.pts[1],startPr);
     }
-    // Speed variation ±10% only so cars stay in their lane band
-    aiVehicles.push({m,rt,pr:0,ang:startAng,spd:rt.spd*(0.95+Math.random()*.1)});
+    const baseSpd=rt.spd*(0.95+Math.random()*.1);
+    aiVehicles.push({
+      m, rt, pr:startPr, ang:startAng,
+      spd:baseSpd, baseSpd,
+      curLaneZ:rt.homeLane||0,
+      overtaking:false, overtakeTimer:0, blocked:false,
+      stalled:false, stallTimer:0, stallFlash:0,
+      // rdt_through state
+      rdtPhase:'ring',     // 'ring' | 'post'
+      rdtAngTravelled:0,   // how much arc traversed so far
+      rdtDone:false,       // exited ring
+    });
   }
 }
+
 function buildAiCar(color){
   const g=new THREE.Group();
   const b=box(1.9,.65,4.,color); b.position.y=.5; g.add(b);
   const c=box(1.6,.6,2.,color); c.position.set(0,1.1,.1); g.add(c);
+  // Headlights
+  [[-0.62,.5,-2.1],[0.62,.5,-2.1]].forEach(([x,y,z])=>{
+    const hl=new THREE.Mesh(new THREE.BoxGeometry(.3,.2,.08),mat(0xffffcc));
+    hl.position.set(x,y,z); g.add(hl);
+  });
   [[1,0,-1.4],[-1,0,-1.4],[1,0,1.4],[-1,0,1.4]].forEach(([x,y,z])=>{
     const w=cyl(.35,.35,.26,12,0x1a1a1a); w.rotation.z=Math.PI/2; w.position.set(x,y,z); g.add(w);
   });
   scene.add(g); return g;
 }
-function updateAI(dt){
+
+// -- AI STALL SYSTEM ------------------------------------------
+function triggerRandomStall(){
+  const candidates=aiVehicles.filter(v=>!v.rt.rdt&&!v.stalled);
+  if(candidates.length===0)return;
+  const v=candidates[Math.floor(Math.random()*candidates.length)];
+  v.stalled=true;
+  v.stallTimer=15+Math.random()*20;
+  v.stallFlash=0;
+  logEvt('⚠️ Vehicle broken down ahead -- find alternate route!',false);
+  setAI('A vehicle has stalled ahead. Demonstrate the three shortest correct routes to your destination.');
+}
+function updateStalls(dt){
   aiVehicles.forEach(v=>{
-    if(v.rt.rdt){
-      // Clockwise = angle decreasing in Three.js (x=cos, z=sin convention)
-      v.ang-=(v.spd/v.rt.r)*dt;
-      v.m.position.set(v.rt.cx+Math.cos(v.ang)*v.rt.r,.38,v.rt.cz+Math.sin(v.ang)*v.rt.r);
-      // Clockwise tangent heading: at angle a, tangent direction is a - PI/2
-      // Car front is -Z so rotation.y = tangent angle in world space
-      // movement dir = (−sin(a), cos(a)) clockwise → atan2 of that
-      // Clockwise tangent: vel=(sin(ang),-cos(ang)), atan2 gives correct heading
-      v.m.rotation.y=Math.atan2(Math.sin(v.ang),-Math.cos(v.ang));
-    } else {
-      v.pr+=(v.spd*dt)/v.rt.pts[0].distanceTo(v.rt.pts[1]);
-      if(v.pr>1)v.pr=v.rt.loop?0:1;
-      v.m.position.lerpVectors(v.rt.pts[0],v.rt.pts[1],v.pr);
-      const dir=new THREE.Vector3().subVectors(v.rt.pts[1],v.rt.pts[0]).normalize();
-      v.m.rotation.y=Math.atan2(dir.x,dir.z);
+    if(!v.stalled)return;
+    v.stallTimer-=dt;
+    v.stallFlash=(v.stallFlash||0)+dt;
+    if(v.m.children[0]&&v.m.children[0].material){
+      v.m.children[0].material.color.setHex(Math.sin(v.stallFlash*6)>0?0xffaa00:0xcc5500);
+    }
+    if(v.stallTimer<=0){
+      v.stalled=false;
+      if(v.m.children[0]&&v.m.children[0].material){
+        v.m.children[0].material.color.setHex(v.origColor||0xff3311);
+      }
+      logEvt('✓ Stalled vehicle cleared',true);
     }
   });
 }
 
+function updateAI(dt){
+  aiVehicles.forEach((v,vi)=>{
+    const rt=v.rt;
+
+    // ── ROUNDABOUT THROUGH-CARS: enter, drive arc CW, exit to post-road ──
+    if(rt.rdt_through && !v.rdtDone){
+      const step=(v.spd/rt.r)*dt;
+      v.ang     -= step;          // CW = decreasing angle
+      v.rdtAngTravelled += step;
+      const cosA=Math.cos(v.ang), sinA=Math.sin(v.ang);
+      v.m.position.set(C.RDT_X+cosA*rt.r, .38, C.RDT_Z+sinA*rt.r);
+      v.m.rotation.y=Math.atan2(sinA,-cosA)+Math.PI/2; // CW tangent heading
+      if(v.rdtAngTravelled >= rt.arcRad){
+        // Exit ring: switch to postRoad
+        v.rdtDone=true;
+        v.rt=rt.postRoad;
+        v.pr=0;
+        v.spd=rt.postRoad.spd;
+        v.m.position.lerpVectors(rt.postRoad.pts[0],rt.postRoad.pts[1],0);
+      }
+      return;
+    }
+    // Car finished roundabout — now on postRoad straight (falls through to straight logic)
+    if(rt.rdt_through && v.rdtDone){
+      // Already switched rt to postRoad; fall through to straight logic below
+    }
+    // Legacy full-circle roundabout cars
+    if(rt.rdt && !rt.rdt_through){
+      v.ang -= (v.spd/rt.r)*dt;
+      const cosA=Math.cos(v.ang), sinA=Math.sin(v.ang);
+      v.m.position.set(rt.cx+cosA*rt.r, .38, rt.cz+sinA*rt.r);
+      v.m.rotation.y=Math.atan2(sinA,-cosA)+Math.PI/2;
+      return;
+    }
+
+    // ── STRAIGHT ROAD ──
+    const len=rt.pts[0].distanceTo(rt.pts[1]);
+    const dir=new THREE.Vector3().subVectors(rt.pts[1],rt.pts[0]).normalize();
+    const isX=rt.axis==='x';
+
+    // Desired lateral position (Z for EW roads, X for NS roads)
+    let targetLat=v.overtaking ? v.overtakeLane : rt.homeLane;
+
+    // ── Detect player car blocking this vehicle ──
+    let playerAhead=false;
+    if(playerCar){
+      const toP=new THREE.Vector3().subVectors(playerCar.position,v.m.position);
+      const fwd=toP.dot(dir);
+      const lat=Math.abs(isX ? playerCar.position.z-v.m.position.z
+                              : playerCar.position.x-v.m.position.x);
+      if(fwd>0 && fwd<14 && lat<2.0) playerAhead=true;
+    }
+
+    // ── Detect AI cars ahead in same lateral band ──
+    let closestAheadSpd=rt.spd;
+    let aiBlocking=false;
+    aiVehicles.forEach((other,oi)=>{
+      if(oi===vi||other.rt.rdt)return;
+      const toO=new THREE.Vector3().subVectors(other.m.position,v.m.position);
+      const fwd=toO.dot(dir);
+      const lat=Math.abs(isX ? other.m.position.z-v.m.position.z
+                              : other.m.position.x-v.m.position.x);
+      if(fwd>0 && fwd<10 && lat<1.8){
+        aiBlocking=true;
+        if(other.spd<closestAheadSpd) closestAheadSpd=other.spd;
+      }
+    });
+
+    // ── Overtake logic ──
+    const canOvertake=rt.maxLane && rt.maxLane>1;
+    if(!v.overtaking && playerAhead && canOvertake){
+      // Check outer lane (homeLane + laneW) is clear
+      const otLane=rt.homeLane+rt.laneW;
+      const clear=!aiVehicles.some((o,oi)=>{
+        if(oi===vi||o.rt.rdt)return false;
+        const lat=Math.abs((isX?o.m.position.z:o.m.position.x)-otLane);
+        const fwd=new THREE.Vector3().subVectors(o.m.position,v.m.position).dot(dir);
+        return lat<1.6 && Math.abs(fwd)<18;
+      });
+      if(clear){
+        v.overtaking=true;
+        v.overtakeLane=otLane;
+        v.overtakeTimer=9;
+      }
+    }
+    if(v.overtaking){
+      v.overtakeTimer-=dt;
+      if(v.overtakeTimer<=0 || (!playerAhead && v.overtakeTimer<5)){
+        v.overtaking=false;
+        v.overtakeLane=rt.homeLane;
+      }
+    }
+
+    // ── Speed control ──
+    if(playerAhead && !v.overtaking){
+      // Follow at player speed (slow/stop behind player)
+      const pSpd=Math.abs(ph&&ph.speed||0);
+      v.spd=Math.max(0, Math.min(v.spd, pSpd+0.3));
+      v.spd=Math.max(0,v.spd-2.5*dt);
+    } else if(aiBlocking){
+      v.spd=Math.max(0,Math.min(v.spd,closestAheadSpd+0.1));
+      v.spd=Math.max(0,v.spd-1.5*dt);
+    } else {
+      v.spd=Math.min(v.spd+2*dt, rt.spd*(v.overtaking?1.12:1));
+    }
+
+    // Stalled vehicles do not advance
+    if(v.stalled){ v.spd=0; return; }
+
+    // Advance along route
+    const advDist=v.spd*dt;
+    v.pr+=advDist/len;
+    if(v.pr>=1){
+      if(rt.loop){ v.pr=0; }
+      else if(!rt.loop && !v.routeDone){
+        // Non-loop route ended — send car back to start of original route
+        // (reset to start of the pre-roundabout road)
+        v.pr=0.999; v.routeDone=true;
+      } else { v.pr=0; } // just keep at end
+    }
+    if(v.pr<0)  v.pr=0;
+
+    const basePos=new THREE.Vector3().lerpVectors(rt.pts[0],rt.pts[1],v.pr);
+
+    // ── Smooth lateral (lane) position ──
+    const curLat=isX?v.m.position.z:v.m.position.x;
+    const latDiff=targetLat-curLat;
+    const newLat=curLat+latDiff*Math.min(1,2.5*dt);
+
+    if(isX){
+      v.m.position.x=basePos.x;
+      v.m.position.z=newLat;
+    } else {
+      v.m.position.x=newLat;
+      v.m.position.z=basePos.z;
+    }
+    v.m.position.y=.38;
+    v.m.rotation.y=Math.atan2(dir.x,dir.z);
+  });
+}
+
 // -- PEDESTRIANS ----------------------------------------------
+// Pedestrians wait on pavement, cross ONLY when nearest TL is green
+// Each ped is assigned to exactly one zebra crossing
 const peds=[];
-const PED_CROSSING_POINTS=[
-  {x:(C.MAJ_LEFT_X+C.MAJ_RIGHT_X)/2,z:C.MAJ_MID_Z-12,axis:'x'},
-  {x:(C.MAJ_LEFT_X+C.MAJ_RIGHT_X)/2-12,z:C.MAJ_MID_Z,axis:'z'},
-  {x:0,z:C.MIN_H_Z-8,axis:'x'},
-  {x:C.MIN_V_X,z:20,axis:'z'},
-  {x:C.RDT_X,z:C.RDT_Z-C.RDT_OUTER-8,axis:'x'},
-];
+
 function spawnPeds(n){
   peds.forEach(p=>scene.remove(p.m)); peds.length=0;
+  if(zebras.length===0)return;
   for(let i=0;i<n;i++){
     const g=new THREE.Group();
-    const body=cyl(.22,.22,1.,8,0x885533+(i*0x101010&0x202020)); body.position.y=.5; g.add(body);
-    const head=cyl(.18,.18,.3,8,0xffccaa); head.position.y=1.2; g.add(head);
-    const arm1=box(.18,.18,.7,0x885533); arm1.position.set(.35,.8,0); arm1.rotation.z=.4; g.add(arm1);
-    const arm2=arm1.clone(); arm2.position.x=-.35; arm2.rotation.z=-.4; g.add(arm2);
-    const cp=PED_CROSSING_POINTS[i%PED_CROSSING_POINTS.length];
-    const startOffset=(Math.random()>.5?1:-1)*(5+Math.random()*3);
-    g.position.set(cp.axis==='x'?cp.x+startOffset:cp.x, 0, cp.axis==='z'?cp.z+startOffset:cp.z);
+    const skinTones=[0xffccaa,0xd4956a,0x8b5e3c,0xc68642,0xf1c27d];
+    const skin=skinTones[Math.floor(Math.random()*skinTones.length)];
+    const body=cyl(.2,.2,1.,8,0x334455+(i*0x080808&0x181818)); body.position.y=.5; g.add(body);
+    const head=cyl(.18,.18,.3,8,skin); head.position.y=1.22; g.add(head);
+    const arm1=box(.16,.16,.65,0x334455); arm1.position.set(.3,.82,0); arm1.rotation.z=.35; g.add(arm1);
+    const arm2=arm1.clone(); arm2.position.x=-.3; arm2.rotation.z=-.35; g.add(arm2);
+
+    // Assign to a zebra crossing
+    const zb=zebras[i%zebras.length];
+    // Start on pavement: offset perpendicular to crossing direction
+    const side=Math.random()>.5?1:-1;
+    const paveDist=zb.roadW/2+1.5; // stand just off road edge
+    let sx,sz;
+    if(zb.axis==='ew'){
+      sx=zb.cx+side*paveDist; sz=zb.cz+(Math.random()-.5)*1.5;
+    } else {
+      sx=zb.cx+(Math.random()-.5)*1.5; sz=zb.cz+side*paveDist;
+    }
+    g.position.set(sx,0,sz);
     scene.add(g);
-    peds.push({m:g,cp,dir:Math.random()>.5?1:-1,t:i*2+Math.random()*6,crossing:false,
-               onCrossing:false,startX:g.position.x,startZ:g.position.z});
+    peds.push({m:g,zb,side,crossing:false,waitTimer:i*3+2,onCrossing:false,crossed:false});
   }
 }
+
+function getNearestTLState(x,z){
+  let nearest=null,nd=Infinity;
+  trafficLights.forEach(tl=>{
+    const d=Math.sqrt((tl.pos.x-x)**2+(tl.pos.z-z)**2);
+    if(d<nd){nd=d;nearest=tl;}
+  });
+  return nearest?nearest.state:'red';
+}
+
 function updatePeds(dt){
   peds.forEach(p=>{
-    p.t-=dt;
-    if(p.t<0){p.crossing=!p.crossing;p.t=4+Math.random()*10;}
-    const prevX=p.m.position.x, prevZ=p.m.position.z;
-    if(p.crossing){
-      if(p.cp.axis==='x')p.m.position.x+=p.dir*.9*dt;
-      else p.m.position.z+=p.dir*.9*dt;
+    p.waitTimer-=dt;
+    // Get nearest TL state to this crossing
+    const tlState=getNearestTLState(p.zb.cx,p.zb.cz);
+    const canCross=(tlState==='green');
+
+    if(!p.crossing){
+      // Standing on pavement -- do not wander, just face the road
+      if(p.waitTimer<=0 && canCross){
+        p.crossing=true;
+        // Target: opposite pavement
+        if(p.zb.axis==='ew'){
+          p.targetX=p.zb.cx - p.side*(p.zb.roadW/2+1.8);
+          p.targetZ=p.zb.cz;
+        } else {
+          p.targetX=p.zb.cx;
+          p.targetZ=p.zb.cz - p.side*(p.zb.roadW/2+1.8);
+        }
+      }
     } else {
-      if(p.cp.axis==='x')p.m.position.z+=Math.sin(sessTime*.8+p.t)*.01;
-      else p.m.position.x+=Math.sin(sessTime*.8+p.t)*.01;
+      const dx=p.targetX-p.m.position.x;
+      const dz=p.targetZ-p.m.position.z;
+      const dist=Math.sqrt(dx*dx+dz*dz);
+      if(dist>0.25){
+        const spd=1.1*dt;
+        p.m.position.x+=dx/dist*spd;
+        p.m.position.z+=dz/dist*spd;
+        p.m.rotation.y=Math.atan2(dx,dz);
+        // walking bob
+        p.m.position.y=Math.abs(Math.sin(sessTime*5))*0.08;
+      } else {
+        // Reached far pavement
+        p.m.position.x=p.targetX;
+        p.m.position.z=p.targetZ;
+        p.m.position.y=0;
+        p.crossing=false;
+        p.side=-p.side;
+        p.waitTimer=5+Math.random()*10;
+      }
     }
-    // Bounce back
-    const offset=p.cp.axis==='x'?Math.abs(p.m.position.x-p.cp.x):Math.abs(p.m.position.z-p.cp.z);
-    if(offset>14){p.dir*=-1;}
-    // Check if on zebra
-    p.onCrossing=false;
-    zebras.forEach(z=>{
-      if(z.axis==='x'&&Math.abs(p.m.position.z-z.cz)<5&&Math.abs(p.m.position.x-z.cx)<z.w/2)p.onCrossing=true;
-      if(z.axis==='ns'&&Math.abs(p.m.position.x-z.cx)<5&&Math.abs(p.m.position.z-z.cz)<z.d/2)p.onCrossing=true;
-    });
+
+    // Mark whether ped is on the crossing (for violation detection)
+    const zb=p.zb;
+    if(zb.axis==='ew'){
+      p.onCrossing=p.crossing && Math.abs(p.m.position.x-zb.cx)<zb.roadW/2+1;
+    } else {
+      p.onCrossing=p.crossing && Math.abs(p.m.position.z-zb.cz)<zb.roadW/2+1;
+    }
   });
 }
 
@@ -1055,27 +1644,55 @@ function onMinorRoad(){
 }
 
 // -- LANE DETECTION -------------------------------------------
+// Lane 1 = leftmost (keep-left = Lane 1), Lane 4 = rightmost (inner, roundabout access)
 function detectLane(){
   if(!playerCar)return{roadType:'off',lane:0};
   const pos=playerCar.position;
   const hw=C.MAJ_W/2, lw=C.MAJ_LW;
 
-  // EW major roads
+  // EW upper (eastbound) – Lane 1 at lowest z
   if(Math.abs(pos.z-C.MAJ_UPPER_Z)<hw){
     const relZ=pos.z-(C.MAJ_UPPER_Z-hw);
     const lane=Math.min(C.MAJ_LANES,Math.max(1,Math.ceil(relZ/lw)));
-    return{roadType:'major',road:'EW_upper',lane};
+    return{roadType:'major',road:'EW_upper',dir:'east',lane};
   }
+  // EW lower (westbound) – Lane 1 at highest z
   if(Math.abs(pos.z-C.MAJ_LOWER_Z)<hw){
     const relZ=pos.z-(C.MAJ_LOWER_Z-hw);
     const lane=Math.min(C.MAJ_LANES,Math.max(1,Math.ceil(relZ/lw)));
-    return{roadType:'major',road:'EW_lower',lane};
+    return{roadType:'major',road:'EW_lower',dir:'west',lane};
   }
-  // Minor
+  // NS left (southbound) – Lane 1 at lowest x
+  if(Math.abs(pos.x-C.MAJ_LEFT_X)<hw&&Math.abs(pos.z)>C.MAJ_W){
+    const relX=pos.x-(C.MAJ_LEFT_X-hw);
+    const lane=Math.min(C.MAJ_LANES,Math.max(1,Math.ceil(relX/lw)));
+    return{roadType:'major',road:'NS_left',dir:'south',lane};
+  }
+  // NS right (northbound) – Lane 1 at highest x
+  if(Math.abs(pos.x-C.MAJ_RIGHT_X)<hw&&Math.abs(pos.z)>C.MAJ_W){
+    const relX=pos.x-(C.MAJ_RIGHT_X-hw);
+    const lane=Math.min(C.MAJ_LANES,Math.max(1,Math.ceil(relX/lw)));
+    return{roadType:'major',road:'NS_right',dir:'north',lane};
+  }
+  // Minor horizontal (two-way)
   if(Math.abs(pos.z-C.MIN_H_Z)<C.MIN_W/2){
     const relZ=pos.z-(C.MIN_H_Z-C.MIN_W/2);
     const lane=Math.min(C.MIN_LANES,Math.max(1,Math.ceil(relZ/C.MIN_LW)));
-    return{roadType:'minor',road:'EW_minor',lane};
+    return{roadType:'minor',road:'EW_minor',dir:pos.x>0?'east':'west',lane};
+  }
+  // Minor vertical (two-way)
+  if(Math.abs(pos.x-C.MIN_V_X)<C.MIN_W/2){
+    const relX=pos.x-(C.MIN_V_X-C.MIN_W/2);
+    const lane=Math.min(C.MIN_LANES,Math.max(1,Math.ceil(relX/C.MIN_LW)));
+    return{roadType:'minor',road:'NS_minor',dir:pos.z>0?'south':'north',lane};
+  }
+  if(inRoundabout()){
+    const dx=pos.x-C.RDT_X, dz=pos.z-C.RDT_Z;
+    const dist=Math.sqrt(dx*dx+dz*dz);
+    const lane=dist<C.RDT_INNER+C.RDT_LANE_W?1
+      :dist<C.RDT_INNER+C.RDT_LANE_W*2?2
+      :dist<C.RDT_INNER+C.RDT_LANE_W*3?3:4;
+    return{roadType:'roundabout',road:'RDT',lane};
   }
   return{roadType:'other',lane:0};
 }
@@ -1120,6 +1737,15 @@ let score=100,totalV=0,sessionFb=[],distTrav=0,sessTime=0;
 const cds={};
 let prevRdtLane=-1,stopHeldTime=0,lastNearStop=-1;
 let pedZoneActive=false;
+
+// Lane transition tracking for subtraction/addition rules
+let lastMajorLane=0, lastMinorLane=0, transitionTracked=false;
+// Roundabout entry/exit lane tracking
+let rdtEntryMajLane=0, rdtEntryAng=0;
+// Parking: track farthest bay logic
+let parkEntryOrder=[]; // which bays entered, in order
+// AI stall system
+let stalledAI=[]; // indices of AI vehicles that are stalled
 
 function coolOf(k){return(cds[k]||0)>sessTime;}
 function setCool(k,d=3){cds[k]=sessTime+d;}
@@ -1243,26 +1869,39 @@ function checkViolations(dt,sc){
 
   // --- 9. ROUNDABOUT RULES ---
   if(inRoundabout()){
-    const dx=pos.x-C.RDT_X,dz=pos.z-C.RDT_Z;
+    const dx=pos.x-C.RDT_X, dz=pos.z-C.RDT_Z;
     const dist=Math.sqrt(dx*dx+dz*dz);
     const ang=Math.atan2(dz,dx);
-    // 4-lane detection: laneW=3, centres at 13.5,16.5,19.5,22.5
-      const lw=C.RDT_LANE_W||3;
-      const lane=dist<C.RDT_INNER+lw?1:dist<C.RDT_INNER+lw*2?2:dist<C.RDT_INNER+lw*3?3:4;
-    // Anti-clockwise
+    const lw=C.RDT_LANE_W||3;
+    const lane=dist<C.RDT_INNER+lw?1:dist<C.RDT_INNER+lw*2?2:dist<C.RDT_INNER+lw*3?3:4;
+
+    // [A] Island touch – must never enter the island
+    if(dist<C.RDT_INNER-.5&&!coolOf('island')){
+      addViol('Touched roundabout island! Island is untouchable -- critical fail.',C.PENALTIES.COLLISION,'⭕');
+      setCool('island',4);
+    }
+
+    // [B] Anti-clockwise travel
     if(!coolOf('rw')&&spd>1){
       const tgAng=ang+Math.PI/2;
       const dot=Math.sin(ph.heading)*Math.cos(tgAng)+Math.cos(ph.heading)*Math.sin(tgAng);
-      if(dot<-.45){addViol('Anti-clockwise in roundabout!',C.PENALTIES.WRONG_WAY,'🔄');setCool('rw',3);}
+      if(dot<-.45){addViol('Anti-clockwise in roundabout! Keep island to your RIGHT.',C.PENALTIES.WRONG_WAY,'🔄');setCool('rw',3);}
     }
-    // Lane change
+
+    // [C] Lane change inside (solid lines = no crossing)
     if(prevRdtLane!==-1&&prevRdtLane!==lane&&spd>1&&!coolOf('rlc')){
-      addViol('Lane change inside roundabout!',C.PENALTIES.RDT_LANE_CHG,'🚫');setCool('rlc',3);
+      addViol(`Lane change inside roundabout! Solid lines mean no lane changes.`,C.PENALTIES.RDT_LANE_CHG,'🚫');setCool('rlc',3);
     }
     prevRdtLane=lane;
 
-    // Lane exit validation -- check which exit angle was chosen vs lane
-    // Stored in roundabout exit check (done when leaving roundabout)
+    // [D] Stopping inside roundabout (only allowed if traffic blocked)
+    if(spd<.15&&dist>C.RDT_INNER&&dist<C.RDT_OUTER&&!coolOf('rdtstop')){
+      const aiNearby=aiVehicles.filter(v=>v.rt.rdt&&v.m.position.distanceTo(pos)<8).length>0;
+      if(!aiNearby){addViol('Stopped inside roundabout! Only stop if traffic is blocked.',C.PENALTIES.NO_STOP,'⛔');setCool('rdtstop',4);}
+    }
+
+    // Record entry lane and angle for exit validation
+    if(rdtEntryLane===-1){rdtEntryLane=lane;rdtEntryAngle=ang;}
   } else {
     if(prevRdtLane!==-1)checkRoundaboutExit();
     prevRdtLane=-1;
@@ -1274,18 +1913,40 @@ function checkViolations(dt,sc){
   // --- 11. PEDESTRIAN CROSSING RULES ---
   checkPedestrianZones(dt);
 
-  // --- 12. PARKING GEAR ---
+  // --- 12. PARKING GEAR & RULES ---
   parkingZones.forEach((pz,i)=>{
     const inside=Math.abs(pos.x-pz.x)<pz.hw&&Math.abs(pos.z-pz.z)<pz.hd;
-    if(inside&&!pz.wasIn&&spd>.4){
-      if(ph.gear!==pz.entryG&&!coolOf(`pe_${i}`)){
-        addViol(`Wrong entry gear for ${pz.type} parking! Need ${pz.entryG}`,C.PENALTIES.WRONG_GEAR,'🅿️');setCool(`pe_${i}`,4);
-      } else if(ph.gear===pz.entryG){logEvt(`✓ Correct entry (${pz.entryG}) -- ${pz.type}`,true);}
+    if(inside&&!pz.wasIn){
+      // Gear check on entry
+      if(spd>.3){
+        if(ph.gear!==pz.entryG&&!coolOf(`pe_${i}`)){
+          addViol(`Wrong entry gear for ${pz.type} parking! Need ${pz.entryG} gear.`,C.PENALTIES.WRONG_GEAR,'🅿️');
+          setCool(`pe_${i}`,4);
+        } else if(ph.gear===pz.entryG&&!coolOf(`pok_${i}`)){
+          logEvt(`✓ Correct entry gear (${pz.entryG}) for ${pz.type} parking`,true);
+          setCool(`pok_${i}`,8);
+        }
+      }
+      // Safe distance check: 1m from other AI vehicles
+      aiVehicles.forEach((v,vi)=>{
+        const aiDist=pos.distanceTo(v.m.position);
+        if(aiDist<1.2&&!coolOf(`psafe_${i}_${vi}`)){
+          addViol('Parking: less than 1m from adjacent vehicle!',C.PENALTIES.COLLISION/2,'🅿️');
+          setCool(`psafe_${i}_${vi}`,4);
+        }
+      });
     }
-    if(!inside&&pz.wasIn&&spd>.4){
-      if(ph.gear!==pz.exitG&&!coolOf(`px_${i}`)){
-        addViol(`Wrong exit gear for ${pz.type} parking! Need ${pz.exitG}`,C.PENALTIES.WRONG_GEAR,'🅿️');setCool(`px_${i}`,4);
-      } else if(ph.gear===pz.exitG){logEvt(`✓ Correct exit (${pz.exitG}) -- ${pz.type}`,true);}
+    if(!inside&&pz.wasIn){
+      // Gear check on exit
+      if(spd>.3){
+        if(ph.gear!==pz.exitG&&!coolOf(`px_${i}`)){
+          addViol(`Wrong exit gear for ${pz.type} parking! Need ${pz.exitG} gear.`,C.PENALTIES.WRONG_GEAR,'🅿️');
+          setCool(`px_${i}`,4);
+        } else if(ph.gear===pz.exitG&&!coolOf(`pxok_${i}`)){
+          logEvt(`✓ Correct exit gear (${pz.exitG}) for ${pz.type} parking`,true);
+          setCool(`pxok_${i}`,8);
+        }
+      }
     }
     pz.wasIn=inside;
   });
@@ -1314,14 +1975,104 @@ function checkViolations(dt,sc){
     }
   });
 
-  // --- 16. AI COLLISION ---
+  // --- 16. AI COLLISION (Golden Rule: see rear tyres/number plate) ---
   aiVehicles.forEach((v,i)=>{
-    if(!coolOf(`col_${i}`)&&pos.distanceTo(v.m.position)<3.5){
-      addViol('Collision with vehicle!',C.PENALTIES.COLLISION,'💥');setCool(`col_${i}`,4);ph.speed*=-.3;
+    const d=pos.distanceTo(v.m.position);
+    if(d<3.5&&!coolOf(`col_${i}`)){
+      addViol('Collision! Maintain Golden Rule distance -- see rear tyres & number plate.',C.PENALTIES.COLLISION,'💥');
+      setCool(`col_${i}`,4); ph.speed*=-.3;
+    } else if(d<6&&d>=3.5&&!coolOf(`gld_${i}`)&&Math.abs(ph.speed)>1){
+      // Too close (< Golden Rule safe gap ~6m)
+      logEvt('⚠️ Too close -- you cannot see rear tyres of vehicle ahead.',false);
+      setCool(`gld_${i}`,5);
     }
   });
 
-  // --- 17. DESTINATION ---
+  // --- 17. PEDESTRIAN CROSSING CRITICAL FAIL ---
+  // If light turns green mid-cross while ped is still on zebra, still a critical fail
+  peds.forEach((p,pi)=>{
+    if(!p.onCrossing)return;
+    const zb=p.zb;
+    const onCrossingArea = zb.axis==='ew'
+      ? Math.abs(pos.z-zb.cz)<3&&Math.abs(pos.x-zb.cx)<zb.roadW/2
+      : Math.abs(pos.x-zb.cx)<3&&Math.abs(pos.z-zb.cz)<zb.roadW/2;
+    if(onCrossingArea&&!coolOf(`ped_crit_${pi}`)){
+      addViol('CRITICAL: Vehicle on crossing while pedestrian present -- immediate fail!',C.PENALTIES.PED_ENCROACH+10,'🚨');
+      setCool(`ped_crit_${pi}`,6);
+    }
+  });
+
+  // --- 18. SUBTRACTION RULE (major->minor lane transition) ---
+  if(!coolOf('sub_rule')){
+    const ld=detectLane();
+    if(ld.roadType==='major'&&ld.lane>0) lastMajorLane=ld.lane;
+    if(ld.roadType==='minor'&&ld.lane>0&&lastMajorLane>0){
+      const expected=SUBTRACTION_RULE[lastMajorLane];
+      if(expected&&ld.lane!==expected&&!coolOf('sub_viol')){
+        addViol(
+          `Wrong lane after major road! From Maj L${lastMajorLane} should enter Min L${expected} (subtract 1).`,
+          C.PENALTIES.WRONG_LANE_EXIT,'🔢');
+        setCool('sub_viol',6);
+      }
+      setCool('sub_rule',4);
+      lastMajorLane=0;
+    }
+  }
+
+  // --- 19. ADDITION RULE (minor->major lane transition) ---
+  if(!coolOf('add_rule')){
+    const ld=detectLane();
+    if(ld.roadType==='minor'&&ld.lane>0) lastMinorLane=ld.lane;
+    if(ld.roadType==='major'&&ld.lane>0&&lastMinorLane>0){
+      const expected=ADDITION_RULE[lastMinorLane];
+      if(expected&&ld.lane!==expected&&ld.lane!==1&&!coolOf('add_viol')){
+        addViol(
+          `Wrong lane after minor road! From Min L${lastMinorLane} should enter Maj L${expected} (add 1).`,
+          C.PENALTIES.WRONG_LANE_EXIT,'🔢');
+        setCool('add_viol',6);
+      }
+      setCool('add_rule',4);
+      lastMinorLane=0;
+    }
+  }
+
+  // --- 20. ROUNDABOUT ENTRY LANE vs OUTER/INNER RULE ---
+  if(!coolOf('rdt_entry')){
+    const ld=detectLane();
+    if(ld.roadType==='major'&&ld.lane>0) rdtEntryMajLane=ld.lane;
+    if(inRoundabout()&&rdtEntryMajLane>0){
+      const dx=pos.x-C.RDT_X, dz=pos.z-C.RDT_Z;
+      const dist=Math.sqrt(dx*dx+dz*dz);
+      const rdtLane=dist<C.RDT_INNER+C.RDT_LANE_W?1
+        :dist<C.RDT_INNER+C.RDT_LANE_W*2?2
+        :dist<C.RDT_INNER+C.RDT_LANE_W*3?3:4;
+      const expectedRdtLane=RDT_ENTRY_LANE_MAP.major[rdtEntryMajLane];
+      if(expectedRdtLane&&Math.abs(rdtLane-expectedRdtLane)>1&&!coolOf('rdt_ent_v')){
+        addViol(
+          `Wrong roundabout lane! Maj L${rdtEntryMajLane} should enter RDT L${expectedRdtLane} not L${rdtLane}.`,
+          C.PENALTIES.RDT_LANE_CHG,'🔄');
+        setCool('rdt_ent_v',6);
+      }
+      setCool('rdt_entry',3);
+      rdtEntryMajLane=0;
+    }
+  }
+
+  // --- 21. PARKING ZONE COLLISION WITH BAY LINES (zero tolerance) ---
+  parkingZones.forEach((pz,i)=>{
+    const inside=Math.abs(pos.x-pz.x)<pz.hw&&Math.abs(pos.z-pz.z)<pz.hd;
+    if(inside){
+      // Check if too close to bay line edge (within 0.25u)
+      const relX=Math.abs(pos.x-pz.x);
+      const relZ=Math.abs(pos.z-pz.z);
+      if((relX>pz.hw-.35||relZ>pz.hd-.35)&&Math.abs(ph.speed)>.2&&!coolOf(`pbay_${i}`)){
+        addViol('Parking bay line contact -- zero tolerance collision!',C.PENALTIES.COLLISION,'🅿️');
+        setCool(`pbay_${i}`,3);
+      }
+    }
+  });
+
+  // --- 22. DESTINATION ---
   if(destMarker&&pos.distanceTo(destMarker.position)<6&&sessTime>5)endSession(true);
 }
 
@@ -1347,13 +2098,20 @@ function checkLaneExitCompliance(){
   }
 }
 
-let laneMapShown='';
+let laneMapShown='',laneMapActiveLane=0;
 function updLaneMap(roadType,activeLane){
-  if(roadType===laneMapShown)return;
-  laneMapShown=roadType;
+  if(roadType===laneMapShown&&activeLane===laneMapActiveLane)return;
+  laneMapShown=roadType; laneMapActiveLane=activeLane;
   const container=document.getElementById('lane-map-rows');
   const lanes=LANE_EXITS[roadType];
-  if(!lanes){container.innerHTML='';return;}
+  if(!lanes){
+    if(roadType==='roundabout'){
+      container.innerHTML=`<div class="lane-row lane-active">
+        <span class="lane-badge">RDT L${activeLane}</span>
+        <span class="lane-opts">Clockwise only -- no lane changes</span></div>`;
+    } else { container.innerHTML=''; }
+    return;
+  }
   container.innerHTML=Object.entries(lanes).map(([ln,opts])=>`
     <div class="lane-row${parseInt(ln)===activeLane?' lane-active':''}">
       <span class="lane-badge">LANE ${ln}</span>
@@ -1362,22 +2120,41 @@ function updLaneMap(roadType,activeLane){
 }
 
 // -- ROUNDABOUT EXIT TRACKING ---------------------------------
-let rdtEntryLane=-1,rdtEntryAngle=0;
+let rdtEntryLane=-1, rdtEntryAngle=0;
 function checkRoundaboutExit(){
   if(!playerCar||rdtEntryLane<0)return;
   const pos=playerCar.position;
-  const dx=pos.x-C.RDT_X,dz=pos.z-C.RDT_Z;
+  const dx=pos.x-C.RDT_X, dz=pos.z-C.RDT_Z;
   const exitAngle=Math.atan2(dz,dx);
-  const diff=((exitAngle-rdtEntryAngle+Math.PI*3)%(Math.PI*2));
-  const deg=diff*180/Math.PI;
-  const allowedExits={1:[0,60,330,60],2:[0,60],3:[60,180],4:[60,360]};
-  const lane=Math.min(4,rdtEntryLane);
-  const allowed=allowedExits[lane]||[0,360];
-  // Simplified: check if turned >270° from lane 2 (not allowed)
-  if(lane===2&&deg>100&&!coolOf('rdtex')){
-    addViol(`Wrong exit from Lane ${lane} -- Lane 2 is straight only!`,C.PENALTIES.WRONG_LANE_EXIT,'🔄');
+  // Clockwise: angle decreases, so sweep measured as: entryAngle - exitAngle (mod 2PI)
+  const sweep=((rdtEntryAngle-exitAngle+Math.PI*4)%(Math.PI*2));
+  const deg=sweep*180/Math.PI;
+
+  // Valid exit ranges (approximate, in degrees of clockwise arc traversed):
+  // Lane 1: 0° (straight/left ~0-90°) or 90° (left turn ~90°)
+  // Lane 2: 0° only (straight ~0-90°, reject >100°)
+  // Lane 3: 90°-180° (right turn / opposite side)
+  // Lane 4: 90°-360° (right, U-turn, 270°, full circle)
+  const lane=Math.min(4,Math.max(1,rdtEntryLane));
+  if(lane===2&&deg>110&&!coolOf('rdtex')){
+    addViol(`Lane 2 exit: straight only! You turned ${deg.toFixed(0)}°. Lane 2 is STRAIGHT ONLY.`,C.PENALTIES.WRONG_LANE_EXIT,'🔄');
     setCool('rdtex',5);
   }
+  if(lane===1&&deg>110&&!coolOf('rdtex1')){
+    addViol(`Lane 1: left or straight only! (2 options). You turned ${deg.toFixed(0)}°.`,C.PENALTIES.WRONG_LANE_EXIT,'🔄');
+    setCool('rdtex1',5);
+  }
+  // Lane 3: straight or right only (major road). deg>200 = went too far
+  if(lane===3&&deg>220&&!coolOf('rdtex3')){
+    addViol(`Lane 3: straight or right only. Turned ${deg.toFixed(0)}°. Use Lane 4 for U-turn.`,C.PENALTIES.WRONG_LANE_EXIT,'🔄');
+    setCool('rdtex3',5);
+  }
+  // Lane 4: all 4 options valid – just log the maneuver
+  if(lane===4&&deg<60&&deg>20&&!coolOf('rdtex4')){
+    addViol(`Lane 4: minimum exit is right (90°). You exited too early at ${deg.toFixed(0)}°.`,C.PENALTIES.WRONG_LANE_EXIT/2,'🔄');
+    setCool('rdtex4',5);
+  }
+  logEvt(`Roundabout exit: Lane ${lane}, arc ${deg.toFixed(0)}°`,deg<110);
   rdtEntryLane=-1;
 }
 
@@ -1468,10 +2245,26 @@ function updSignHUD(){
     document.getElementById('sp-tl-t').textContent=nearest.state.toUpperCase()+' -- '+
       (nearest.state==='red'?'STOP':nearest.state==='green'?'PROCEED':nearest.state==='ra'?'PREPARE':'STOP SAFELY');
   } else pills['sp-tl'].classList.remove('show');
-  // Zone
+  // Zone + approach sequence indicator
   const zPill=pills['sp-zone'];
-  const zt=inRoundabout()?'ROUNDABOUT 20':onMinorRoad()?'MINOR 30':'MAJOR 50';
-  document.getElementById('sp-zone-t').textContent=zt+' km/h';
+  let zt='MAJOR 50 km/h';
+  if(inRoundabout()){zt='ROUNDABOUT 20 km/h';}
+  else if(onMinorRoad()){zt='MINOR 30 km/h';}
+  else {
+    // Check proximity to roundabout arm (show approach sequence step)
+    if(playerCar){
+      const dx=playerCar.position.x-C.RDT_X, dz=playerCar.position.z-C.RDT_Z;
+      const distRdt=Math.sqrt(dx*dx+dz*dz);
+      if(distRdt<C.RDT_OUTER+22&&distRdt>C.RDT_OUTER){
+        const step=distRdt>C.RDT_OUTER+16?'1: Select lane'
+          :distRdt>C.RDT_OUTER+8?'2: Zebra crossing'
+          :distRdt>C.RDT_OUTER+2?'3: STOP LINE – yield'
+          :'4: Enter roundabout';
+        zt='APPROACH STEP '+step;
+      }
+    }
+  }
+  document.getElementById('sp-zone-t').textContent=zt;
   zPill.className='sign-pill show'+(inRoundabout()?'':onMinorRoad()?' warn-pill':' ok-pill');
   // Ped
   if(pedWarnActive)pills['sp-ped'].className='sign-pill show danger-pill';
@@ -1481,7 +2274,18 @@ function updSignHUD(){
   if(ld.lane>0){
     const lPill=pills['sp-lane'];
     const opts=LANE_EXITS[ld.roadType]?.[ld.lane];
-    document.getElementById('sp-lane-t').textContent=`L${ld.lane}: `+(opts?opts.join(', '):'-');
+    let laneText=`L${ld.lane}`;
+    if(opts) laneText+=': '+opts[0].split(' ')[0];
+    // Show transition rule hint
+    if(ld.roadType==='major'&&lastMinorLane>0){
+      const exp=ADDITION_RULE[lastMinorLane];
+      laneText+=` (+1 from Min L${lastMinorLane}->${exp})`;
+    }
+    if(ld.roadType==='minor'&&lastMajorLane>0){
+      const exp=SUBTRACTION_RULE[lastMajorLane];
+      laneText+=` (-1 from Maj L${lastMajorLane}->${exp})`;
+    }
+    document.getElementById('sp-lane-t').textContent=laneText;
     lPill.className='sign-pill show ok-pill';
   } else pills['sp-lane'].classList.remove('show');
 }
@@ -1513,42 +2317,54 @@ function updTopBar(){
   document.getElementById('ts-spd').textContent=(Math.abs(ph.speed)*3.6).toFixed(0);
 }
 
-// -- AI INSTRUCTOR ---------------------------------------------
+// -- AI INSTRUCTOR (NTSA MTB certified responses) --------------------
 const AI_DB={
-  'Red light':'Traffic light is RED -- come to a full stop behind the stop line.',
-  'Amber light':'Amber means stop safely -- unless you have already crossed the line.',
-  'Red+Amber':'Red and Amber together -- remain stopped, prepare your gear and mirrors.',
-  'Speed':'You are over the speed limit. Ease off and stay within the posted zone.',
-  'Wrong way':'One-way road -- all vehicles travel in one direction only. Turn around safely.',
-  'yellow centre':'Yellow centre line is a solid barrier. Never cross it on a two-way road.',
-  'roundabout':'Select your lane before entering the roundabout. No lane changes inside.',
-  'STOP sign':'Stop sign: vehicle must reach complete stop (0 km/h) for at least 3 seconds.',
-  'yield':'Yield sign: reduce speed, be ready to stop. Give way to traffic on the major road.',
-  'parking':'Angle: enter forward (D), exit reverse (R). Parallel: reverse in (R), exit forward (D).',
-  'indicator':'Always signal before turning. Cancel signal after completing the maneuver.',
-  'Collision':'Maintain Golden Rule distance -- see the rear wheels or number plate ahead.',
-  'Lane change':'One lane at a time. Signal, check mirrors, blind spot, then move.',
-  'crossing':'Approaching zebra crossing -- pedestrians have right of way at all times.',
-  'Encroach':'Never drive onto a crossing while a pedestrian is on it.',
-  'Horn':'Never hoot at pedestrians. This is intimidation and is a violation.',
-  'No U-Turn':'U-turn is prohibited in this zone. Find an authorised turning point.',
-  'No Entry':'Do not enter a No Entry zone. Reverse safely and use the correct route.',
-  'U-turn':'U-turn not allowed here. Only Lane 4 of major road or Lane 3 of minor road permit U-turns.',
-  'Wrong exit':'Check your entry lane before the roundabout. Each lane has specific permitted exits.',
+  'Red light':'Traffic light is RED -- come to a full stop behind the stop line. Do not move until Green.',
+  'Amber light':'Amber means stop safely unless you have already crossed the stop line.',
+  'Red+Amber':'Red and Amber together -- remain stopped. Prepare gear and mirrors. Wait for Green only.',
+  'Speed':'You exceeded the speed limit. Major=50, Minor=30, Roundabout=20 km/h. Ease off immediately.',
+  'Wrong way':'One-way road -- all vehicles travel in one direction only. Do not drive against traffic flow.',
+  'yellow centre':'Yellow centre line is a SOLID BARRIER on two-way roads. Crossing it is a critical fail.',
+  'roundabout':'Select correct lane BEFORE the roundabout. Major: L1=left/straight, L2=straight, L3=straight/right, L4=right/U-turn/270°/360°. Keep island to your RIGHT.',
+  'STOP sign':'STOP sign: vehicle must reach complete 0 km/h and remain stopped for 3 full seconds.',
+  'yield':'Yield/Give Way: reduce speed, be ready to stop. Traffic on major road has absolute priority.',
+  'parking':'Angle: FORWARD in (D), REVERSE out (R). Parallel: REVERSE in (R), FORWARD out (D).',
+  'indicator':'Signal RIGHT entering roundabout. Signal LEFT before your exit. Cancel after maneuver.',
+  'Collision':'GOLDEN RULE: maintain distance where you can see rear tyres AND number plate ahead.',
+  'Too close':'Increase your following distance. You must be able to see the rear tyres of the car ahead.',
+  'Lane change':'Signal, mirrors, blind spot, then move ONE lane at a time. Never skip lanes.',
+  'crossing':'Pedestrians on zebra crossing have absolute right of way. Stop and WAIT until fully clear.',
+  'Encroach':'Never drive onto the crossing while any pedestrian is on it -- even if light turns Green.',
+  'CRITICAL':'CRITICAL SAFETY FAILURE: Pedestrian on crossing. Stop immediately and wait.',
+  'Horn':'Never hoot at pedestrians. This counts as intimidation and is a violation.',
+  'No U-Turn':'U-turn prohibited here. Only permitted at central reserve gaps or Lane 4/Lane 3 exits.',
+  'No Entry':'No Entry zone. Reverse safely and use the correct authorised route.',
+  'U-turn':'U-turns only permitted: Major Lane 4 (central reserve gaps), or Minor Lane 3 exits.',
+  'Wrong exit':'Lane exit violation. Check entry lane before roundabout. Each lane has specific exits.',
+  'subtract':'Subtraction rule: moving from Major (4 lanes) to Minor (3 lanes) -- subtract 1 from lane.',
+  'Wrong lane after major':'From Maj L4->Min L3, Maj L3->Min L2, Maj L2->Min L1. This is mandatory.',
+  'Wrong lane after minor':'Addition rule: Min L1->Maj L2, Min L2->Maj L3, Min L3->Maj L4. Add 1.',
+  'roundabout lane':'Maj L1/L2 enter outer RDT lanes (1/2). Maj L3/L4 enter inner RDT lanes (3/4).',
+  'stall':'A vehicle has stalled. Find the next shortest correct route. 3 routes: short, long, parking.',
+  'bay line':'Zero tolerance: any contact with bay lines or parked vehicles is an immediate fail.',
 };
 const HINTS=[
-  'Always keep left on every road -- it is the primary rule of the MTB.',
-  'Major road: 4 lanes. Lane 1 = left/straight. Lane 4 = right/180°/270°/360°.',
-  'Minor road: 3 lanes. Lane 3 allows straight, right turn, or U-turn.',
-  'Roundabout: clockwise only, yield on entry, no stops, no lane changes.',
-  'Pedestrian on zebra? Stop and wait until they have fully crossed.',
-  'Stop sign = complete halt for 3 full seconds minimum, behind the stop line.',
-  'Yellow centre line on minor road = solid wall. Crossing it is a critical fail.',
+  'KEEP LEFT always -- Lane 1 is the primary keep-left lane on all roads.',
+  'Major road: 4 lanes. L1=straight/left. L2=straight only. L3=straight/right. L4=right/180°/270°/360°.',
+  'Minor road: 3 lanes. L1=straight/left. L2=straight. L3=straight/right/U-turn.',
+  'Subtraction rule: Major->Minor = subtract 1 (L4->L3, L3->L2, L2->L1).',
+  'Addition rule: Minor->Major = add 1 (L1->L2, L2->L3, L3->L4).',
+  'Roundabout: clockwise, island to your RIGHT. Yield before entry. No stops inside. No lane changes (solid lines).',
+  'Pedestrians cross on RED light only. Even if Green shows mid-cross -- wait for them.',
+  'STOP sign: complete stop (0 km/h) for 3 full seconds. Counted from zero speed.',
+  'Yellow centre line = solid wall on two-way minor roads. Never cross it.',
   'Angle parking: FORWARD in, REVERSE out. Parallel: REVERSE in, FORWARD out.',
-  'Signal at least 30 metres before turning, changing lane, or parking.',
-  'Golden Rule: always see the rear wheels of the vehicle ahead.',
-  'Use shortest correct route first. Longest route if needed. Parking only as last resort.',
-  'Traffic light Red+Amber = prepare only. Do not move until Green shows.',
+  'Signal 30 metres before turning, lane changing, or entering/exiting parking.',
+  'Golden Rule: see rear tyres AND number plate of vehicle ahead at all times.',
+  'Shortest route first. Longest route second. Parking ONLY as absolute last resort.',
+  'Traffic light: Red->Red+Amber->Green->Amber. Red+Amber = PREPARE only, do not move.',
+  'Central reserve gaps are U-turn zones. Yield to oncoming traffic before using them.',
+  'Approach sequence: (1) Select lane early. (2) Slow at zebra. (3) Stop at red light/stop line. (4) Yield, then enter.',
 ];
 function getAIResponse(msg){
   for(const[k,v]of Object.entries(AI_DB))if(msg.includes(k))return v;
@@ -1625,18 +2441,49 @@ function drawOverlay(){
   function wp(wx,wz){return[ox+wx*sc,oy+wz*sc];}
   ctx.fillStyle='rgba(5,10,20,.88)';ctx.fillRect(mx,my,MS,MS);
   ctx.strokeStyle='rgba(245,196,0,.45)';ctx.lineWidth=1;ctx.strokeRect(mx,my,MS,MS);
-  // Roads
+  // Roads - dual carriageway major
   ctx.fillStyle='#1e2228';
-  const mhw=C.MAJ_W/2*sc;
-  ctx.fillRect(mx,oy+(C.MAJ_UPPER_Z-mhw),MS,C.MAJ_W*sc);
-  ctx.fillRect(mx,oy+(C.MAJ_LOWER_Z-mhw),MS,C.MAJ_W*sc);
-  ctx.fillRect(ox+(C.MAJ_LEFT_X-mhw),my,C.MAJ_W*sc,MS);
-  // Minor
+  const mhw=C.MAJ_W/2;
+  ctx.fillRect(mx, oy+(C.MAJ_UPPER_Z-mhw)*sc, MS, C.MAJ_W*sc);
+  ctx.fillRect(mx, oy+(C.MAJ_LOWER_Z-mhw)*sc, MS, C.MAJ_W*sc);
+  ctx.fillRect(ox+(C.MAJ_LEFT_X-mhw)*sc,  my, C.MAJ_W*sc, MS);
+  ctx.fillRect(ox+(C.MAJ_RIGHT_X-mhw)*sc, my, C.MAJ_W*sc, MS);
+  // Yellow median EW
+  ctx.fillStyle='#f5c400';
+  ctx.fillRect(mx, oy+C.MAJ_MID_Z*sc-1, MS, 2);
+  // U-turn gap markers
+  ctx.fillStyle='#44ff88';
+  [-100,-40,-10].forEach(gx=>{
+    const [gxi,gyi]=wp(gx,C.MAJ_MID_Z);
+    ctx.fillRect(gxi-3,gyi-3,6,6);
+  });
+  // Minor roads (two-way)
   ctx.fillStyle='#252a32';
-  ctx.fillRect(mx,oy+(C.MIN_H_Z-C.MIN_W/2*sc),MS,C.MIN_W*sc);
+  ctx.fillRect(mx,oy+(C.MIN_H_Z-C.MIN_W/2)*sc,MS,C.MIN_W*sc);
+  ctx.fillRect(ox+(C.MIN_V_X-C.MIN_W/2)*sc,my,C.MIN_W*sc,MS);
   // Roundabout
   ctx.beginPath();ctx.arc(...wp(C.RDT_X,C.RDT_Z),C.RDT_OUTER*sc,0,Math.PI*2);ctx.fillStyle='#1e2228';ctx.fill();
   ctx.beginPath();ctx.arc(...wp(C.RDT_X,C.RDT_Z),C.RDT_INNER*sc,0,Math.PI*2);ctx.fillStyle='#1a4010';ctx.fill();
+  // Parking zones
+  ctx.fillStyle='rgba(80,140,255,.35)';
+  parkingZones.forEach(pz=>{
+    const[px2,py2]=wp(pz.x,pz.z);
+    ctx.fillRect(px2-pz.hw*sc,py2-pz.hd*sc,pz.hw*2*sc,pz.hd*2*sc);
+  });
+  // Zebra crossings
+  ctx.fillStyle='rgba(255,255,200,.6)';
+  zebras.forEach(z=>{
+    const[zx,zy]=wp(z.cx,z.cz);
+    if(z.axis==='ew') ctx.fillRect(zx-z.roadW/2*sc,zy-2,z.roadW*sc,4);
+    else ctx.fillRect(zx-2,zy-z.roadW/2*sc,4,z.roadW*sc);
+  });
+  // AI stalled indicators
+  aiVehicles.filter(v=>v.stalled).forEach(v=>{
+    const[ax,ay]=wp(v.m.position.x,v.m.position.z);
+    ctx.beginPath();ctx.arc(ax,ay,5,0,Math.PI*2);
+    ctx.fillStyle='#ffaa00';ctx.fill();
+    ctx.fillStyle='#000';ctx.font='7px monospace';ctx.fillText('!',ax-2,ay+3);
+  });
   // Dest
   if(destMarker){const[dx,dy]=wp(destMarker.position.x,destMarker.position.z);ctx.beginPath();ctx.arc(dx,dy,4,0,Math.PI*2);ctx.fillStyle='#00ff88';ctx.fill();}
   // AI
@@ -1659,40 +2506,71 @@ function drawOverlay(){
 // -- SCENARIOS -------------------------------------------------
 const SCENARIOS=[
   {name:'Basic City Driving',rule:'Rule 1: Shortest Route',diff:'e',label:'BASIC',
-   speedLimit:50,ai:4,peds:3,
-   destPos:new THREE.Vector3(50,0,55),startPos:new THREE.Vector3(-80,.38,C.MAJ_UPPER_Z-5.25),startH:Math.PI/2,
-   desc:'Follow major road east, use correct lane discipline, obey all traffic signals.',
-   hints:['Keep left at all times.','Stop fully at red lights.','Signal before turning.','Use the shortest correct route.']},
-  {name:'Roundabout Navigation',rule:'Rule 1: Shortest + Roundabout',diff:'m',label:'INTERMEDIATE',
-   speedLimit:50,ai:8,peds:2,
-   destPos:new THREE.Vector3(-75,.0,C.MAJ_UPPER_Z),startPos:new THREE.Vector3(100,.38,C.MAJ_UPPER_Z-5.25),startH:-Math.PI/2,
-   desc:'Navigate through the roundabout correctly. Enter from correct lane, yield, exit correctly.',
-   hints:['Yield to vehicles already in roundabout.','Do not change lanes inside.','Lane 1 outer: straight/left. Lane 2: straight only.','Signal before exiting the roundabout.']},
-  {name:'Lane Exit Mapping',rule:'Lane Discipline + Exit Rules',diff:'m',label:'INTERMEDIATE',
-   speedLimit:50,ai:5,peds:2,
-   destPos:new THREE.Vector3(C.RDT_X,.0,C.RDT_Z-30),startPos:new THREE.Vector3(-100,.38,C.MAJ_UPPER_Z-1.75),startH:Math.PI/2,
-   desc:'Choose the correct lane for each exit. Lane 4 enables 180°/270°/360° turns. Lane 2 is straight only.',
-   hints:['Lane 4 only: opposite side (180°), 270°, full circle.','Lane 2 is STRAIGHT ONLY -- no turning from it.','On minor road: Lane 3 allows U-turn.','Shift one lane at a time when needed.']},
+   speedLimit:50,ai:4,peds:3,stallAfter:0,
+   destPos:new THREE.Vector3(50,0,55),startPos:new THREE.Vector3(-80,.38,majLaneCentre(C.MAJ_UPPER_Z,1)),startH:Math.PI/2,
+   desc:'Follow major road east using correct lane discipline. Obey all traffic signals. Keep left always.',
+   hints:['Keep left at all times -- Lane 1 is the primary lane.',
+          'Stop fully at red lights behind the stop line.',
+          'Signal 30m before turning or changing lane.',
+          'Use the shortest correct route to your destination.']},
+  {name:'Roundabout Navigation',rule:'Lane Entry/Exit + Yield',diff:'m',label:'INTERMEDIATE',
+   speedLimit:50,ai:8,peds:2,stallAfter:0,
+   destPos:new THREE.Vector3(-75,.0,C.MAJ_UPPER_Z),startPos:new THREE.Vector3(RDT_E_MOUTH+5,.38,majLaneCentre(C.MAJ_LOWER_Z,1)),startH:-Math.PI/2,
+   desc:'Enter roundabout from correct lane. Lanes 1 & 2 use outer ring; Lanes 3 & 4 use inner ring. Yield on entry.',
+   hints:['Major L1/L2 -> outer roundabout lanes. L3/L4 -> inner lanes.',
+          'Yield to all vehicles ALREADY in the roundabout.',
+          'No lane changes inside the roundabout -- solid lines.',
+          'Signal LEFT before your exit. Signal RIGHT on entry.']},
+  {name:'Lane Exit Mapping',rule:'Subtraction & Addition Rules',diff:'m',label:'INTERMEDIATE',
+   speedLimit:50,ai:5,peds:2,stallAfter:0,
+   destPos:new THREE.Vector3(C.RDT_X,.0,C.RDT_Z-30),startPos:new THREE.Vector3(-100,.38,majLaneCentre(C.MAJ_UPPER_Z,2)),startH:Math.PI/2,
+   desc:'Demonstrate subtraction rule (Major->Minor: lane-1) and addition rule (Minor->Major: lane+1).',
+   hints:['Subtraction: Maj L4->Min L3, Maj L3->Min L2, Maj L2->Min L1.',
+          'Addition: Min L3->Maj L4, Min L2->Maj L3, Min L1->Maj L2.',
+          'Lane 2 on major road: STRAIGHT ONLY -- never turn from it.',
+          'Lane 4 major: right (90°), U-turn (180°), 270°, full circle.']},
   {name:'Stop & Yield Signs',rule:'Priority Sign Compliance',diff:'m',label:'INTERMEDIATE',
-   speedLimit:30,ai:4,peds:4,
-   destPos:new THREE.Vector3(C.MIN_V_X,.0,-40),startPos:new THREE.Vector3(-80,.38,C.MIN_H_Z+1),startH:Math.PI/2,
+   speedLimit:30,ai:4,peds:4,stallAfter:0,
+   destPos:new THREE.Vector3(C.MIN_V_X,.0,-40),startPos:new THREE.Vector3(-50,.38,minLaneCentre(C.MIN_H_Z,1)),startH:Math.PI/2,
    desc:'Navigate minor roads. Full 3-second stop at STOP signs. Yield correctly at GIVE WAY signs.',
-   hints:['STOP sign: complete stop for 3 full seconds minimum.','YIELD: slow down, be ready to stop for major road traffic.','Stop LINE is broad white transverse -- stop BEHIND it.','Broken transverse lines = Give Way zone.']},
+   hints:['STOP sign: reach 0 km/h and hold for 3 full seconds.',
+          'YIELD: slow to near-stop, give way to major road traffic.',
+          'Stop LINE is broad white transverse -- stop BEHIND it.',
+          'Minor roads are TWO-WAY -- yellow centre line = wall.']},
   {name:'Pedestrian Crossings',rule:'Zebra Crossing Rules',diff:'m',label:'INTERMEDIATE',
-   speedLimit:30,ai:4,peds:6,
-   destPos:new THREE.Vector3(-60,.0,-70),startPos:new THREE.Vector3(C.MIN_V_X,.38,40),startH:Math.PI,
-   desc:'Zebra crossings: detect pedestrians in 3m zone, stop and wait until fully clear.',
-   hints:['3-metre rule: decelerate when pedestrian enters zone.','Stop behind stop line -- not on stripes.','Wait until pedestrian fully clears crossing.','Never overtake a vehicle stopped at a crossing.','No horn near a pedestrian crossing.']},
+   speedLimit:30,ai:4,peds:6,stallAfter:0,
+   destPos:new THREE.Vector3(-60,.0,-70),startPos:new THREE.Vector3(C.MIN_V_X+C.MIN_LW/2,.38,55),startH:Math.PI,
+   desc:'Pedestrians cross ONLY on Red light. Even if light turns Green mid-cross -- wait until fully clear.',
+   hints:['3-metre rule: decelerate when ped enters your zone.',
+          'Stop BEHIND stop line -- never on the stripes.',
+          'Wait until pedestrian has FULLY crossed -- not just past your car.',
+          'CRITICAL FAIL: vehicle on crossing while ped is present.',
+          'No horn near any pedestrian crossing.']},
   {name:'Parking Maneuvers',rule:'Rule 3: Parking Last Resort',diff:'m',label:'INTERMEDIATE',
-   speedLimit:30,ai:3,peds:2,
-   destPos:new THREE.Vector3(-88,.0,52),startPos:new THREE.Vector3(0,.38,C.MIN_H_Z+1),startH:Math.PI/2,
-   desc:'Reach angle parking via minor road. Enter forward (D), exit reverse (R). Yellow kerbs are no-stop.',
-   hints:['Angle parking: D gear forward in, R gear reverse out.','Parallel: R gear reverse in, D gear forward out.','Never stop on yellow kerbs.','Park only as last resort -- use direct route first.']},
+   speedLimit:30,ai:3,peds:2,stallAfter:0,
+   destPos:new THREE.Vector3(66,.0,46),startPos:new THREE.Vector3(0,.38,minLaneCentre(C.MIN_H_Z,1)),startH:Math.PI/2,
+   desc:'Angle: enter D (forward), exit R (reverse). Parallel: enter R (reverse), exit D (forward). Farthest bay first.',
+   hints:['Angle parking: FORWARD in (D gear), REVERSE out (R gear).',
+          'Parallel: REVERSE in (R gear), FORWARD out (D gear).',
+          'Park from FARTHEST bay first (farthest from exit).',
+          'Maintain 1m from bay lines and other vehicles.',
+          'Parking is LAST RESORT -- use direct route first.']},
+  {name:'Obstacle Route-Finding',rule:'3-Route Rule + Stall Avoidance',diff:'h',label:'HARD',
+   speedLimit:50,ai:8,peds:4,stallAfter:12,
+   destPos:new THREE.Vector3(-5,.0,43),startPos:new THREE.Vector3(-80,.38,majLaneCentre(C.MAJ_UPPER_Z,1)),startH:Math.PI/2,
+   desc:'A vehicle will stall ahead. Find the next shortest correct route. Demonstrate all 3 route options.',
+   hints:['Route 1: Shortest. Route 2: Next shortest. Route 3: Longest (with parking).',
+          'A stalled vehicle is NOT a reason to stop in the road.',
+          'Signal correctly before changing route.',
+          'Maintain Golden Rule distance from all vehicles at all times.']},
   {name:'Full MTB Assessment',rule:'All 3 Rules -- Complete Test',diff:'h',label:'EXPERT',
-   speedLimit:50,ai:10,peds:8,
-   destPos:new THREE.Vector3(44,.0,60),startPos:new THREE.Vector3(-80,.38,C.MAJ_UPPER_Z-5.25),startH:Math.PI/2,
-   desc:'Complete NTSA Model Town Board assessment. All rules apply. No reminders -- full independent evaluation.',
-   hints:['All MTB rules apply simultaneously.','Shortest route first, longest second, parking last.','Every sign, signal, lane, and maneuver is scored.','Good luck -- this is the full NTSA assessment.']},
+   speedLimit:50,ai:10,peds:8,stallAfter:30,
+   destPos:new THREE.Vector3(44,.0,60),startPos:new THREE.Vector3(-80,.38,majLaneCentre(C.MAJ_UPPER_Z,1)),startH:Math.PI/2,
+   desc:'Complete NTSA Model Town Board assessment. All rules apply simultaneously. No reminders.',
+   hints:['All MTB rules apply. Subtraction/Addition rules enforced.',
+          'Shortest route first, longest second, parking only as last resort.',
+          'Every sign, signal, lane transition, and maneuver is scored.',
+          'Good luck -- this is the full NTSA assessment.']},
 ];
 
 // -- SCENARIO UI -----------------------------------------------
@@ -1738,6 +2616,7 @@ document.getElementById('btn-end').addEventListener('click',()=>endSession(false
 document.getElementById('res-retry').addEventListener('click',()=>{document.getElementById('res-mod').style.display='none';startSc();});
 document.getElementById('res-menu').addEventListener('click',()=>document.getElementById('res-mod').style.display='none');
 
+let stallScheduled=0; // game time to trigger next stall
 function startSc(){
   const sc=SCENARIOS[selSc]; activeSc=sc;
   score=100;totalV=0;sessTime=0;distTrav=0;sessionFb=[];
@@ -1746,6 +2625,7 @@ function startSc(){
   sigL=false;sigR=false;updSigUI();
   ph.speed=0;ph.heading=sc.startH;ph.steer=0;ph.gear='N';setGear('N');
   prevRdtLane=-1;rdtEntryLane=-1;pedWarnActive=false;laneMapShown='';
+  lastMajorLane=0;lastMinorLane=0;rdtEntryMajLane=0;
 
   buildWorld(sc);
   playerCar=buildPlayerCar();
@@ -1754,6 +2634,8 @@ function startSc(){
   destMarker.position.copy(sc.destPos);destMarker.position.y=0;
 
   spawnAI(sc.ai); spawnPeds(sc.peds);
+  stallScheduled=sc.stallAfter>0?sc.stallAfter:Infinity;
+
   document.getElementById('log-list').innerHTML='';
   updTopBar(); updRoutePanel(sc);
   setAI(sc.hints[0]);
@@ -1794,8 +2676,12 @@ function animate(now){
   const dt=Math.min((now-lastT)/1000,.05);lastT=now;
   if(gameRunning&&activeSc){
     sessTime+=dt;
+    if(sessTime>=stallScheduled&&stallScheduled<Infinity){
+      triggerRandomStall();stallScheduled=Infinity;
+    }
     physicsStep(dt,activeSc);
     updateAI(dt);
+    updateStalls(dt);
     updatePeds(dt);
     updateTLights(dt);
     checkViolations(dt,activeSc);
