@@ -1,0 +1,1821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kenya MTB Simulator v2 -- NTSA Certified</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;600;700&family=Source+Code+Pro:wght@400;600&family=Noto+Sans:wght@300;400;600&display=swap');
+
+:root {
+  --ui-bg:#0a0f18; --ui-border:rgba(245,196,0,0.28); --ui-accent:#f5c400;
+  --ui-text:#dce8f0; --ui-dim:#5a7080; --panel-bg:rgba(8,14,24,0.94);
+  --danger:#e8321a; --safe:#1fc86b; --warn:#f5aa00;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--ui-bg);font-family:'Noto Sans',sans-serif;overflow:hidden;color:var(--ui-text);height:100vh;width:100vw;}
+
+/* LAYOUT */
+#app{display:grid;grid-template-columns:250px 1fr 210px;grid-template-rows:52px 1fr 138px;height:100vh;}
+#topbar{grid-column:1/-1;background:#060b12;border-bottom:2px solid var(--ui-accent);display:flex;align-items:center;gap:20px;padding:0 18px;}
+#logo{font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;color:var(--ui-accent);letter-spacing:3px;}
+#logo span{color:#fff;font-weight:300;}
+.tbadge{background:rgba(245,196,0,0.1);border:1px solid rgba(245,196,0,0.3);padding:3px 10px;border-radius:2px;font-size:9px;letter-spacing:2px;color:var(--ui-accent);font-family:'Source Code Pro',monospace;}
+#score-strip{margin-left:auto;display:flex;gap:24px;align-items:center;}
+.ts{text-align:center;}.tsv{font-family:'Oswald',sans-serif;font-size:20px;font-weight:600;line-height:1;}
+.tsl{font-size:9px;color:var(--ui-dim);letter-spacing:2px;margin-top:2px;}
+
+/* PANELS */
+#lp{background:var(--panel-bg);border-right:1px solid var(--ui-border);display:flex;flex-direction:column;overflow:hidden;}
+#rp{background:var(--panel-bg);border-left:1px solid var(--ui-border);display:flex;flex-direction:column;overflow:hidden;}
+.ptitle{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:3px;color:var(--ui-accent);padding:9px 13px 7px;border-bottom:1px solid rgba(245,196,0,0.12);text-transform:uppercase;}
+
+/* Scenario list */
+#sc-list{flex:1;overflow-y:auto;padding:6px;}
+.sc-item{padding:8px 11px;border-radius:3px;margin-bottom:3px;cursor:pointer;border:1px solid transparent;transition:all .15s;}
+.sc-item:hover{background:rgba(245,196,0,0.07);border-color:rgba(245,196,0,0.2);}
+.sc-item.active{background:rgba(245,196,0,0.13);border-color:var(--ui-accent);}
+.scn{font-family:'Oswald',sans-serif;font-size:12px;font-weight:600;color:#fff;}
+.scr{font-size:9px;color:var(--ui-dim);margin-top:1px;}
+.scd{display:inline-block;font-size:8px;padding:1px 5px;border-radius:2px;margin-top:3px;letter-spacing:1px;}
+.de{background:rgba(31,200,107,.15);color:#1fc86b;}.dm{background:rgba(245,196,0,.15);color:#f5c400;}.dh{background:rgba(232,50,26,.15);color:#e8321a;}
+
+/* Lane exit panel */
+#lane-panel{border-top:1px solid rgba(245,196,0,.12);padding:10px 13px;}
+.lane-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+.lane-badge{font-family:'Source Code Pro',monospace;font-size:9px;background:rgba(245,196,0,.15);color:var(--ui-accent);padding:1px 5px;border-radius:2px;min-width:46px;text-align:center;}
+.lane-opts{font-size:10px;color:#8099a8;}
+.lane-active .lane-badge{background:rgba(31,200,107,.2);color:#1fc86b;}
+
+/* Route panel */
+#ri-panel{border-top:1px solid rgba(245,196,0,.12);padding:10px 13px;}
+.ri-row{display:flex;align-items:center;gap:7px;margin-bottom:4px;}
+.ri-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.ri-lbl{font-size:10px;color:var(--ui-dim);}
+
+/* Canvas */
+#cw{position:relative;overflow:hidden;background:#2d6a1f;}
+#mc{position:absolute;top:0;left:0;width:100%;height:100%;}
+#oc{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+#cam-ctrl{position:absolute;top:10px;left:10px;display:flex;gap:5px;}
+.cbtn{background:rgba(6,11,18,.88);border:1px solid rgba(245,196,0,.35);color:var(--ui-accent);font-size:9px;letter-spacing:1px;padding:5px 9px;border-radius:2px;cursor:pointer;font-family:'Source Code Pro',monospace;transition:all .15s;}
+.cbtn:hover,.cbtn.active{background:rgba(245,196,0,.2);}
+
+/* Sign indicator strip */
+#sign-strip{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:6px;pointer-events:none;}
+.sign-pill{background:rgba(6,11,18,.9);border:1px solid rgba(255,255,255,.15);border-radius:20px;padding:4px 10px;font-size:10px;color:#aaa;display:flex;align-items:center;gap:5px;transition:all .3s;opacity:0;}
+.sign-pill.show{opacity:1;}
+.sign-pill.warn-pill{border-color:rgba(245,196,0,.5);color:#f5c400;}
+.sign-pill.danger-pill{border-color:rgba(232,50,26,.6);color:#e8321a;}
+.sign-pill.ok-pill{border-color:rgba(31,200,107,.5);color:#1fc86b;}
+
+/* Right panel */
+#spd-wrap{padding:12px;display:flex;flex-direction:column;align-items:center;}
+#sc{width:124px;height:124px;}
+#ind-strip{display:flex;justify-content:space-between;padding:0 12px 8px;}
+.ind{text-align:center;font-size:8px;letter-spacing:1px;color:var(--ui-dim);}
+.ind-icon{font-size:16px;display:block;margin-bottom:2px;filter:grayscale(1) opacity(.25);}
+.ind.on .ind-icon{filter:none;}.ind.lon .ind-icon{color:#1fc86b;filter:none;}.ind.ron .ind-icon{color:#1fc86b;filter:none;}
+.ind.on{color:var(--ui-accent);}
+#gearbox{margin:0 12px 8px;border:1px solid var(--ui-border);border-radius:3px;padding:6px;display:flex;justify-content:space-around;}
+.gi{font-family:'Oswald',sans-serif;font-size:16px;font-weight:700;color:var(--ui-dim);cursor:pointer;padding:2px 5px;border-radius:2px;transition:all .1s;}
+.gi.active{color:var(--ui-accent);background:rgba(245,196,0,.15);}
+#tl-phase{margin:0 12px 8px;background:rgba(0,0,0,.3);border:1px solid var(--ui-border);border-radius:3px;padding:6px 10px;}
+.tlp-title{font-size:8px;color:var(--ui-dim);letter-spacing:2px;margin-bottom:5px;}
+#tl-phase-row{display:flex;gap:4px;align-items:center;}
+.tlp-dot{width:14px;height:14px;border-radius:50%;border:1px solid rgba(255,255,255,.1);transition:all .3s;}
+.tlp-label{font-size:9px;color:var(--ui-dim);font-family:'Source Code Pro',monospace;}
+#ai-sec{flex:1;border-top:1px solid var(--ui-border);padding:9px 12px;overflow:hidden;}
+.ai-lbl{font-size:8px;color:var(--ui-accent);letter-spacing:2px;margin-bottom:5px;}
+#ai-msg{font-size:10px;color:#90aabb;line-height:1.6;}
+
+/* Bottom panel */
+#bp{grid-column:1/-1;background:#060b12;border-top:1px solid var(--ui-border);display:grid;grid-template-columns:250px 1fr 210px;}
+#ctrl-area{padding:10px 13px;border-right:1px solid var(--ui-border);}
+.ct{font-size:8px;color:var(--ui-accent);letter-spacing:2px;margin-bottom:6px;}
+.cgrid{display:grid;grid-template-columns:repeat(3,38px);grid-template-rows:repeat(3,34px);gap:3px;}
+.cbtn2{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:3px;color:#7090a0;font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .1s;user-select:none;-webkit-tap-highlight-color:transparent;}
+.cbtn2:active,.cbtn2.pressed{background:rgba(245,196,0,.2);border-color:var(--ui-accent);color:var(--ui-accent);transform:scale(.92);}
+.cempty{visibility:hidden;}
+#log-area{padding:10px 13px;overflow:hidden;}
+.lt{font-size:8px;color:var(--ui-accent);letter-spacing:2px;margin-bottom:5px;}
+#log-list{max-height:85px;overflow-y:auto;}
+.le{font-size:9px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04);display:flex;gap:7px;}
+.lt2{color:var(--ui-dim);font-family:'Source Code Pro',monospace;white-space:nowrap;font-size:8px;}
+.lm{color:#d06050;}.lok .lm{color:#1fc86b;}
+#act-area{padding:10px 13px;border-left:1px solid var(--ui-border);display:flex;flex-direction:column;gap:6px;justify-content:center;}
+.abtn{background:rgba(245,196,0,.1);border:1px solid var(--ui-accent);color:var(--ui-accent);font-family:'Oswald',sans-serif;font-size:12px;letter-spacing:2px;padding:7px 0;border-radius:2px;cursor:pointer;transition:all .15s;text-align:center;}
+.abtn:hover{background:rgba(245,196,0,.22);}
+.abtn.sec{background:transparent;border-color:rgba(255,255,255,.12);color:var(--ui-dim);font-size:10px;}
+.abtn.sec:hover{border-color:rgba(255,255,255,.28);color:#aaa;}
+
+/* Overlays */
+#vf{position:fixed;inset:0;pointer-events:none;z-index:150;border:4px solid var(--danger);opacity:0;transition:opacity .18s;}
+#vf.on{opacity:1;}
+#ped-warn{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:rgba(232,50,26,.92);border:2px solid #ff6644;border-radius:4px;padding:6px 18px;font-family:'Oswald',sans-serif;font-size:13px;color:#fff;letter-spacing:2px;pointer-events:none;display:none;}
+
+/* Modal */
+.mbd{position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;z-index:200;}
+.mo{background:#0c1420;border:1px solid var(--ui-accent);border-radius:5px;padding:28px 32px;max-width:540px;width:90%;text-align:center;}
+.mo h2{font-family:'Oswald',sans-serif;font-size:26px;font-weight:700;letter-spacing:4px;margin-bottom:6px;}
+.mo-sub{font-size:11px;color:var(--ui-dim);letter-spacing:2px;margin-bottom:20px;}
+.mo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0;}
+.mo-stat{background:rgba(245,196,0,.07);border:1px solid rgba(245,196,0,.22);border-radius:3px;padding:12px;}
+.mo-sv{font-family:'Oswald',sans-serif;font-size:28px;font-weight:700;color:#fff;}
+.mo-sl{font-size:8px;color:var(--ui-dim);letter-spacing:2px;margin-top:3px;}
+.mo-fb{text-align:left;margin:10px 0;max-height:140px;overflow-y:auto;}
+.mo-fi{font-size:10px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05);color:#7090a0;}
+.mo-fi.p{color:#1fc86b;}.mo-fi.f{color:#e8321a;}
+.mo-btns{display:flex;gap:10px;justify-content:center;margin-top:16px;}
+
+::-webkit-scrollbar{width:3px;} ::-webkit-scrollbar-thumb{background:rgba(245,196,0,.3);border-radius:2px;}
+</style>
+</head>
+<body>
+<div id="vf"></div>
+
+<div id="app">
+<!-- TOPBAR -->
+<div id="topbar">
+  <div id="logo">MTB <span>Pro v2</span></div>
+  <div class="tbadge">KENYA NTSA</div>
+  <div class="tbadge" id="sc-badge">SELECT SCENARIO</div>
+  <div id="score-strip">
+    <div class="ts"><div class="tsv" id="ts-score" style="color:#f5c400">100</div><div class="tsl">SCORE</div></div>
+    <div class="ts"><div class="tsv" id="ts-v" style="color:#e8321a">0</div><div class="tsl">VIOLATIONS</div></div>
+    <div class="ts"><div class="tsv" id="ts-t">0:00</div><div class="tsl">TIME</div></div>
+    <div class="ts"><div class="tsv" id="ts-spd">0</div><div class="tsl">KM/H</div></div>
+    <div class="ts"><div class="tsv" id="ts-lane" style="color:#4a90d9">--</div><div class="tsl">LANE</div></div>
+  </div>
+</div>
+
+<!-- LEFT PANEL -->
+<div id="lp">
+  <div class="ptitle">Training Scenarios</div>
+  <div id="sc-list"></div>
+  <div id="lane-panel">
+    <div class="ptitle" style="padding:0 0 7px">Lane Exit Map</div>
+    <div id="lane-map-rows"></div>
+  </div>
+  <div id="ri-panel">
+    <div class="ptitle" style="padding:0 0 7px">Route Info</div>
+    <div class="ri-row"><div class="ri-dot" style="background:#1fc86b"></div><div class="ri-lbl" id="ri-s">Start: --</div></div>
+    <div class="ri-row"><div class="ri-dot" style="background:#f5c400"></div><div class="ri-lbl" id="ri-d">Dest: --</div></div>
+    <div class="ri-row"><div class="ri-dot" style="background:#4a90d9"></div><div class="ri-lbl" id="ri-r">Rule: --</div></div>
+  </div>
+</div>
+
+<!-- CANVAS -->
+<div id="cw">
+  <canvas id="mc"></canvas>
+  <canvas id="oc"></canvas>
+  <div id="cam-ctrl">
+    <button class="cbtn active" id="c-fol">FOLLOW</button>
+    <button class="cbtn" id="c-top">TOP</button>
+    <button class="cbtn" id="c-hd">HOOD</button>
+  </div>
+  <div id="sign-strip">
+    <div class="sign-pill" id="sp-tl">🚦 <span id="sp-tl-t">RED -- STOP</span></div>
+    <div class="sign-pill" id="sp-ped">🚶 <span>PEDESTRIAN</span></div>
+    <div class="sign-pill" id="sp-zone">📍 <span id="sp-zone-t">MAJOR ROAD</span></div>
+    <div class="sign-pill" id="sp-lane">🛣️ <span id="sp-lane-t">LANE 1</span></div>
+  </div>
+  <div id="ped-warn">⚠️ PEDESTRIAN ON CROSSING -- WAIT TO CLEAR</div>
+</div>
+
+<!-- RIGHT PANEL -->
+<div id="rp">
+  <div id="spd-wrap"><canvas id="sc" width="124" height="124"></canvas></div>
+  <div id="ind-strip">
+    <div class="ind" id="il"><span class="ind-icon">◀</span>LEFT</div>
+    <div class="ind" id="ib"><span class="ind-icon">🛑</span>BRAKE</div>
+    <div class="ind" id="ih"><span class="ind-icon">📢</span>HORN</div>
+    <div class="ind" id="ir"><span class="ind-icon">▶</span>RIGHT</div>
+  </div>
+  <div id="gearbox">
+    <div class="gi" data-g="R">R</div>
+    <div class="gi active" data-g="N">N</div>
+    <div class="gi" data-g="D">D</div>
+  </div>
+  <div id="tl-phase">
+    <div class="tlp-title">TRAFFIC LIGHT PHASE</div>
+    <div id="tl-phase-row">
+      <div class="tlp-dot" id="tlp-r" style="background:#330000"></div>
+      <div class="tlp-dot" id="tlp-ra" style="background:#332200"></div>
+      <div class="tlp-dot" id="tlp-g" style="background:#003300"></div>
+      <div class="tlp-dot" id="tlp-a" style="background:#332200"></div>
+      <div class="tlp-label" id="tlp-txt">--</div>
+    </div>
+  </div>
+  <div id="ai-sec">
+    <div class="ai-lbl">▶ AI INSTRUCTOR</div>
+    <div id="ai-msg">Select a scenario and press START SCENARIO to begin.</div>
+  </div>
+</div>
+
+<!-- BOTTOM -->
+<div id="bp">
+  <div id="ctrl-area">
+    <div class="ct">CONTROLS · WASD/ARROWS</div>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div class="cgrid">
+        <div class="cbtn2 cempty"></div>
+        <div class="cbtn2" id="ba">▲</div>
+        <div class="cbtn2 cempty"></div>
+        <div class="cbtn2" id="bl">◀</div>
+        <div class="cbtn2" id="bb">■</div>
+        <div class="cbtn2" id="br">▶</div>
+        <div class="cbtn2 cempty"></div>
+        <div class="cbtn2" id="bd">▼</div>
+        <div class="cbtn2 cempty"></div>
+      </div>
+      <div style="display:grid;gap:3px;margin-top:1px">
+        <div class="cbtn2" id="bsl" style="width:58px;font-size:9px;padding:3px">◀ Q SIG</div>
+        <div class="cbtn2" id="bsr" style="width:58px;font-size:9px;padding:3px">SIG E ▶</div>
+        <div class="cbtn2" id="bhn" style="width:58px;font-size:9px;padding:3px">H HORN</div>
+        <div class="cbtn2" id="bc2" style="width:58px;font-size:9px;padding:3px">C CAM</div>
+      </div>
+    </div>
+  </div>
+  <div id="log-area">
+    <div class="lt">EVENT LOG</div>
+    <div id="log-list"></div>
+  </div>
+  <div id="act-area">
+    <button class="abtn" id="btn-start">START SCENARIO</button>
+    <button class="abtn sec" id="btn-reset">RESET</button>
+    <button class="abtn sec" id="btn-end">END SESSION</button>
+  </div>
+</div>
+</div>
+
+<!-- RESULT MODAL -->
+<div class="mbd" id="res-mod" style="display:none">
+  <div class="mo">
+    <h2 id="res-t">ASSESSMENT</h2>
+    <div class="mo-sub" id="res-sub">Kenya Model Town Board</div>
+    <div class="mo-grid">
+      <div class="mo-stat"><div class="mo-sv" id="res-s">--</div><div class="mo-sl">SCORE</div></div>
+      <div class="mo-stat"><div class="mo-sv" id="res-v">--</div><div class="mo-sl">VIOLATIONS</div></div>
+      <div class="mo-stat"><div class="mo-sv" id="res-g">--</div><div class="mo-sl">GRADE</div></div>
+    </div>
+    <div class="mo-fb" id="res-fb"></div>
+    <div class="mo-btns">
+      <button class="abtn" id="res-retry" style="width:120px">RETRY</button>
+      <button class="abtn sec" id="res-menu" style="width:120px">MENU</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+// ===========================================================
+//  KENYA MTB SIMULATOR v2 -- Complete Rules Engine
+//  All NTSA MTB regulations encoded as hard logic constraints
+// ===========================================================
+
+// -- CONSTANTS -----------------------------------------------
+const C = {
+  MAJ_LANES:4, MIN_LANES:3, MAJ_LW:3.5, MIN_LW:3.2,
+  get MAJ_W(){return this.MAJ_LANES*this.MAJ_LW;},
+  get MIN_W(){return this.MIN_LANES*this.MIN_LW;},
+  SPD_MAJ:50/3.6, SPD_MIN:30/3.6, SPD_RDT:20/3.6, SPD_PARK:8/3.6, SPD_SCHOOL:20/3.6,
+  ACCEL:5.8, BRAKE:19, STEER:1.85, MAX_STEER:0.78,
+  PED_3M:3,   // 3-metre detection zone
+  STOP_SEC:3, // seconds for full stop compliance
+
+  // Road Z positions
+  MAJ_UPPER_Z:-50, MAJ_LOWER_Z:-36, MAJ_MID_Z:-43,
+  // Road X positions (vertical roads)
+  MAJ_LEFT_X:-70, MAJ_RIGHT_X:-56,
+  MIN_H_Z:30, MIN_V_X:40,
+
+  // Roundabout
+  RDT_X:65, RDT_Z:-43, RDT_OUTER:24, RDT_INNER:12, RDT_LANE_W:3,
+
+  PENALTIES:{
+    SPEEDING:8, RED_LIGHT:20, WRONG_WAY:25, WRONG_GEAR:15,
+    NO_SIGNAL:6, YLW_KERB:10, RDT_LANE_CHG:15, NO_STOP:18,
+    COLLISION:20, YLW_LINE:25, NO_YIELD:12, WRONG_LANE_EXIT:12,
+    PED_ENCROACH:25, PED_OVERTAKE:20, PED_HORN:8,
+    SOLID_LINE_CROSS:20, NO_YIELD_PED:15, CONT_WHITE_CROSS:20,
+  }
+};
+
+// Lane exit mapping -- MTB official
+const LANE_EXITS = {
+  major:{
+    1:['straight (0°)','left (90°)'],
+    2:['straight (0°)'],
+    3:['straight (0°)','right (90°)'],
+    4:['right (90°)','opposite (180°)','third exit (270°)','full circle (360°)']
+  },
+  minor:{
+    1:['straight (0°)','left (90°)'],
+    2:['straight (0°)'],
+    3:['straight (0°)','right (90°)','U-turn (180°)']
+  }
+};
+
+// -- THREE.JS -------------------------------------------------
+const mc = document.getElementById('mc');
+const oc = document.getElementById('oc');
+const cw = document.getElementById('cw');
+const renderer = new THREE.WebGLRenderer({canvas:mc, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.1;
+const scene=new THREE.Scene();
+scene.fog=new THREE.Fog(0x8aabb8,100,320);
+const cam=new THREE.PerspectiveCamera(55,1,.1,500);
+
+function onResize(){
+  const w=cw.clientWidth,h=cw.clientHeight;
+  renderer.setSize(w,h); oc.width=w; oc.height=h;
+  cam.aspect=w/h; cam.updateProjectionMatrix();
+}
+window.addEventListener('resize',onResize); onResize();
+
+// -- LIGHTS ---------------------------------------------------
+scene.add(new THREE.AmbientLight(0xbcccda,0.65));
+const sun=new THREE.DirectionalLight(0xffe8c0,1.3);
+sun.position.set(60,90,40); sun.castShadow=true;
+sun.shadow.mapSize.width=2048; sun.shadow.mapSize.height=2048;
+sun.shadow.camera.left=-200; sun.shadow.camera.right=200;
+sun.shadow.camera.top=200; sun.shadow.camera.bottom=-200;
+sun.shadow.camera.far=500;
+scene.add(sun);
+const fill=new THREE.DirectionalLight(0x8899bb,.4);
+fill.position.set(-40,20,-30);
+scene.add(fill);
+
+// -- GEOMETRY HELPERS -----------------------------------------
+function mat(color,opts={}){return new THREE.MeshLambertMaterial({color,...opts});}
+function box(w,h,d,color,opts={}){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(color,opts));
+  if(opts.cast!==false)m.castShadow=true; m.receiveShadow=true; return m;
+}
+function cyl(rt,rb,h,seg,color){return new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat(color));}
+function dk(hex,f){return((((hex>>16)&0xff)*f|0)<<16)|((((hex>>8)&0xff)*f|0)<<8)|(((hex&0xff)*f|0));}
+
+// -- WORLD STATE ----------------------------------------------
+let world=null, trafficLights=[], stopSigns=[], yieldSigns=[], yellowKerbs=[],
+    parkingZones=[], zebras=[], noEntryZones=[], noUTurnZones=[], solidLines=[],
+    destMarker=null;
+
+// -- WORLD BUILD ----------------------------------------------
+function buildWorld(scenario){
+  if(world)scene.remove(world);
+  world=new THREE.Group();
+  trafficLights=[]; stopSigns=[]; yieldSigns=[]; yellowKerbs=[];
+  parkingZones=[]; zebras=[]; noEntryZones=[]; noUTurnZones=[]; solidLines=[];
+
+  // Ground
+  const g=box(400,.2,400,0x3a7a25); g.position.y=-.1; world.add(g);
+
+  buildMajorRoads(); buildMinorRoads(); buildRoundabout();
+  buildParkingLots(); buildEnvironment(); buildAllSigns();
+
+  // Destination
+  destMarker=buildDestGroup();
+  world.add(destMarker);
+  scene.add(world);
+}
+
+// -- MAJOR ROADS ----------------------------------------------
+function buildMajorRoads(){
+  const RC=0x1e2228, hw=C.MAJ_W/2, lw=C.MAJ_LW;
+
+  // -- EAST-WEST ONE-WAY PAIR --
+  [{z:C.MAJ_UPPER_Z,dir:1},{z:C.MAJ_LOWER_Z,dir:-1}].forEach(({z,dir})=>{
+    const r=box(300,.2,C.MAJ_W,RC); r.position.set(0,.1,z); world.add(r);
+    // White broken lane dividers
+    for(let l=1;l<C.MAJ_LANES;l++){
+      const lz=z-hw+l*lw;
+      for(let x=-140;x<140;x+=8){
+        const d=box(4,.12,.18,0xeeeeff); d.position.set(x,.22,lz); world.add(d);
+      }
+    }
+    // Solid white edges
+    [-hw,hw].forEach(dz=>{
+      const e=box(300,.12,.22,0xffffff); e.position.set(0,.22,z+dz); world.add(e);
+      solidLines.push({type:'edge_ew',z:z+dz,hw:150,dir});
+    });
+    // Directional arrows per lane
+    for(let l=0;l<C.MAJ_LANES;l++){
+      const lx=dir>0?-80:80;
+      const lz=z-hw+(l+.5)*lw;
+      buildArrow(lx,.22,lz,dir>0?0:Math.PI,.7);
+    }
+  });
+
+  // Yellow divider between paired roads (NO STOPPING)
+  const yk=box(300,.28,.55,0xf5c400); yk.position.set(0,.22,C.MAJ_MID_Z); world.add(yk);
+  yellowKerbs.push({x:0,z:C.MAJ_MID_Z,hw:150,hd:.9,noStop:true});
+
+  // -- NORTH-SOUTH ONE-WAY PAIR --
+  [{x:C.MAJ_LEFT_X,dir:-1},{x:C.MAJ_RIGHT_X,dir:1}].forEach(({x,dir})=>{
+    const r=box(C.MAJ_W,.2,300,RC); r.position.set(x,.1,0); world.add(r);
+    for(let l=1;l<C.MAJ_LANES;l++){
+      const lx=x-hw+l*lw;
+      for(let z=-140;z<140;z+=8){
+        const d=box(.18,.12,4,0xeeeeff); d.position.set(lx,.22,z); world.add(d);
+      }
+    }
+    [-hw,hw].forEach(dx=>{
+      const e=box(.22,.12,300,0xffffff); e.position.set(x+dx,.22,0); world.add(e);
+      solidLines.push({type:'edge_ns',x:x+dx,hd:150,dir});
+    });
+  });
+
+  // Yellow divider NS roads
+  const ykns=box(.55,.28,300,0xf5c400); ykns.position.set((C.MAJ_LEFT_X+C.MAJ_RIGHT_X)/2,.22,0); world.add(ykns);
+  yellowKerbs.push({x:(C.MAJ_LEFT_X+C.MAJ_RIGHT_X)/2,z:0,hw:.9,hd:150,noStop:true});
+
+  // Main intersection fill
+  const jx=(C.MAJ_LEFT_X+C.MAJ_RIGHT_X)/2;
+  const junc=box(C.MAJ_W+4,.2,C.MAJ_W+4,RC); junc.position.set(jx,.12,C.MAJ_MID_Z); world.add(junc);
+
+  // Zebra crossings at intersection
+  buildZebra(jx-12,C.MAJ_MID_Z,'ns');  // crossing NS road
+  buildZebra(jx,C.MAJ_MID_Z+12,'ew'); // crossing EW road
+}
+
+function buildArrow(x,y,z,rot,s=1){
+  const stem=box(.28*s,.12,2*s,0xdddddd); stem.position.set(x,y,z); stem.rotation.y=rot; world.add(stem);
+  const head=box(1.0*s,.12,.45*s,0xdddddd); head.position.set(x,y,z-1*s); head.rotation.y=rot; world.add(head);
+}
+
+// -- MINOR ROADS ----------------------------------------------
+function buildMinorRoads(){
+  const RC=0x252a32, hw=C.MIN_W/2, lw=C.MIN_LW;
+
+  // Horizontal minor (two-way)
+  const mh=box(200,.2,C.MIN_W,RC); mh.position.set(0,.1,C.MIN_H_Z); world.add(mh);
+  // Yellow CONTINUOUS centre line = wall
+  const ycl=box(200,.14,.28,0xf5c400); ycl.position.set(0,.22,C.MIN_H_Z); world.add(ycl);
+  yellowKerbs.push({x:0,z:C.MIN_H_Z,hw:100,hd:.5,isYellowLine:true,isCentreLine:true});
+  // White lane dividers (broken)
+  [-.5,.5].forEach(side=>{
+    const lz=C.MIN_H_Z+side*lw;
+    if(Math.abs(lz-C.MIN_H_Z)<.1)return;
+    for(let x=-95;x<95;x+=7){const d=box(3.5,.12,.18,0xdddddd);d.position.set(x,.22,lz);world.add(d);}
+  });
+  // Solid edges
+  [-hw,hw].forEach(dz=>{const e=box(200,.12,.22,0xffffff);e.position.set(0,.22,C.MIN_H_Z+dz);world.add(e);});
+  // Zigzag no-stop zones near junctions
+  buildZigzag(-55,C.MIN_H_Z,'ew'); buildZigzag(45,C.MIN_H_Z,'ew');
+
+  // Vertical minor (two-way)
+  const mv=box(C.MIN_W,.2,200,RC); mv.position.set(C.MIN_V_X,.1,0); world.add(mv);
+  const ycv=box(.28,.14,200,0xf5c400); ycv.position.set(C.MIN_V_X,.22,0); world.add(ycv);
+  yellowKerbs.push({x:C.MIN_V_X,z:0,hw:.5,hd:100,isYellowLine:true,isCentreLine:true});
+  [-hw,hw].forEach(dx=>{const e=box(.22,.12,200,0xffffff);e.position.set(C.MIN_V_X+dx,.22,0);world.add(e);});
+
+  // STOP signs at T-junctions (minor joining two-way)
+  [{x:-55,z:C.MIN_H_Z,rot:0},{x:C.MIN_V_X,z:50,rot:Math.PI}].forEach(sp=>{
+    world.add(buildStopSignPost(sp.x+3,sp.z+3,sp.rot));
+    stopSigns.push({x:sp.x,z:sp.z,r:10,stopHeld:0,triggered:false,passed:false});
+    // Stop line
+    const sl=box(C.MIN_W,.13,.3,0xffffff); sl.position.set(sp.x,.22,sp.z+(sp.rot===0?-5:5)); world.add(sl);
+  });
+
+  // GIVE WAY / YIELD at minor-major junctions
+  [{x:-63,z:C.MIN_H_Z-8,rot:0},{x:C.MIN_V_X,z:C.MAJ_MID_Z+8,rot:Math.PI}].forEach(yp=>{
+    world.add(buildYieldSign(yp.x,yp.z,yp.rot));
+    yieldSigns.push({x:yp.x,z:yp.z,r:14});
+    // Broken transverse lines
+    for(let i=-2;i<=2;i++){
+      const yl=box(C.MIN_W,.13,.22,0xffffff);
+      yl.position.set(yp.x,.22,yp.z+(i*.6)+(yp.rot===0?-1:1));
+      world.add(yl);
+    }
+  });
+
+  // Zebra crossings on minor roads
+  buildZebra(0,C.MIN_H_Z-8,'ew');
+  buildZebra(C.MIN_V_X,20,'ns');
+
+  // NO ENTRY on wrong-way entries
+  [{x:-63,z:C.MAJ_UPPER_Z-5,rot:0}].forEach(ne=>{
+    world.add(buildNoEntrySign(ne.x,ne.z));
+    noEntryZones.push({x:ne.x,z:ne.z,r:8,dir:'wrong_east'});
+  });
+}
+
+function buildZigzag(x,z,axis){
+  for(let i=-4;i<=4;i++){
+    const zz=box(axis==='ew'?.22:.22,.13,axis==='ew'?1.2:1.2,0xf5c400);
+    zz.position.set(axis==='ew'?x+i*1.8:x,z,.22+i*.22);
+    zz.rotation.y=.5;
+    world.add(zz);
+  }
+}
+
+// -- ZEBRA CROSSINGS ------------------------------------------
+function buildZebra(cx,cz,axis){
+  const roadW = axis==='ew' ? C.MAJ_W : C.MIN_W;
+  const stripes=7;
+  for(let i=0;i<stripes;i++){
+    const even=i%2===0;
+    const s = axis==='ew'
+      ? box(roadW,.16,.7,even?0xeeeeee:0x1e2228)
+      : box(.7,.16,roadW,even?0xeeeeee:0x1e2228);
+    s.position.set(axis==='ew'?cx:cx+(i-.5)*1.0,
+                   .23,
+                   axis==='ew'?cz+(i-stripes/2)*1.0:cz);
+    world.add(s);
+  }
+  // Stop line (solid white, broad)
+  const sl=axis==='ew'
+    ? box(roadW,.14,.45,0xffffff)
+    : box(.45,.14,roadW,0xffffff);
+  sl.position.set(axis==='ew'?cx:cx,
+                  .23,
+                  axis==='ew'?cz-roadW*.6:cz-roadW*.6);
+  world.add(sl);
+
+  // Detection zone (invisible logic zone stored)
+  const zdat={
+    cx, cz, axis,
+    w: axis==='ew'?roadW:3, d: axis==='ew'?3:roadW,
+    activePeds:[],
+    carWaiting:false
+  };
+  zebras.push(zdat);
+}
+
+// -- ROUNDABOUT -----------------------------------------------
+function buildRoundabout(){
+  const {RDT_X:cx,RDT_Z:cz,RDT_OUTER:oR,RDT_INNER:iR}=C;
+  // 4 lanes: iR=12, oR=24 -> laneW=3 each
+  // Lane centres: 13.5, 16.5, 19.5, 22.5
+  const laneW=(oR-iR)/4; // 3 units per lane
+
+  // Road ring surface
+  const geo=new THREE.RingGeometry(iR,oR,64);
+  const mesh=new THREE.Mesh(geo,mat(0x1e2228,{side:THREE.DoubleSide}));
+  mesh.rotation.x=-Math.PI/2; mesh.position.set(cx,.15,cz); world.add(mesh);
+
+  // Inner island
+  const island=cyl(iR,iR,.5,64,0x2d7020); island.position.set(cx,.22,cz); world.add(island);
+  // Island kerb ring (white)
+  const ikGeo=new THREE.RingGeometry(iR-.05,iR+.3,64);
+  const ik=new THREE.Mesh(ikGeo,mat(0xffffff,{side:THREE.DoubleSide}));
+  ik.rotation.x=-Math.PI/2; ik.position.set(cx,.26,cz); world.add(ik);
+
+  // Trees on island
+  for(let a=0;a<Math.PI*2;a+=Math.PI*.7){
+    const t=cyl(.4,.5,2.5,8,0x5c3d1e); t.position.set(cx+Math.cos(a)*7,1.25,cz+Math.sin(a)*7); world.add(t);
+    const c2=cyl(2.2,.4,4,8,0x2d7a2d); c2.position.set(cx+Math.cos(a)*7,4.5,cz+Math.sin(a)*7); world.add(c2);
+  }
+
+  // 4-lane dividers: 3 inner dividers + outer edge
+  // Divider radii: iR+laneW, iR+2*laneW, iR+3*laneW, oR
+  [iR+laneW, iR+2*laneW, iR+3*laneW, oR].forEach((r,i)=>{
+    const isDash = i < 3; // inner 3 are dashed (lane changes allowed on entry/exit)
+    if(isDash){
+      // Dashed lane divider
+      const segs=48;
+      for(let seg=0;seg<segs;seg+=2){
+        const a0=(seg/segs)*Math.PI*2;
+        const a1=((seg+0.8)/segs)*Math.PI*2;
+        const dashGeo=new THREE.RingGeometry(r-.09,r+.09,1,1,a0,a1-a0);
+        const dm=new THREE.Mesh(dashGeo,mat(0xffffff,{side:THREE.DoubleSide}));
+        dm.rotation.x=-Math.PI/2; dm.position.set(cx,.26,cz); world.add(dm);
+      }
+    } else {
+      // Solid outer edge ring
+      const rg=new THREE.RingGeometry(r-.12,r+.12,64);
+      const rm=new THREE.Mesh(rg,mat(0xffffff,{side:THREE.DoubleSide}));
+      rm.rotation.x=-Math.PI/2; rm.position.set(cx,.26,cz); world.add(rm);
+    }
+  });
+
+  // Clockwise direction arrows in each lane
+  const laneCentres=[iR+laneW*.5, iR+laneW*1.5, iR+laneW*2.5, iR+laneW*3.5];
+  laneCentres.forEach(r=>{
+    for(let a=0;a<Math.PI*2;a+=Math.PI/4){
+      const ar=box(.22,.12,1.4,0x555566);
+      ar.position.set(cx+Math.cos(a)*r,.26,cz+Math.sin(a)*r);
+      // Clockwise tangent direction: angle - PI/2
+      ar.rotation.y=a-Math.PI/2; world.add(ar);
+    }
+  });
+
+  // Entry/exit roads at 4 cardinal points
+  [0,Math.PI/2,Math.PI,Math.PI*1.5].forEach(a=>{
+    // Approach road fill
+    const fill=box(C.MAJ_W,.2,8,0x1e2228);
+    fill.rotation.y=a;
+    fill.position.set(cx+Math.cos(a)*(oR+4),.1,cz+Math.sin(a)*(oR+4));
+    world.add(fill);
+
+    // Yield cones at entry
+    const cone=cyl(.28,0,1.1,6,0xff4400);
+    cone.position.set(cx+Math.cos(a)*(oR+3),.55,cz+Math.sin(a)*(oR+3)); world.add(cone);
+
+    // Yield sign
+    world.add(buildYieldSign(cx+Math.cos(a)*(oR+5.5),cz+Math.sin(a)*(oR+5.5),a+Math.PI));
+    yieldSigns.push({x:cx+Math.cos(a)*(oR+5.5),z:cz+Math.sin(a)*(oR+5.5),r:10,isRoundabout:true});
+
+    // Broken yield transverse lines at entry
+    for(let i=-1;i<=1;i+=2){
+      const yline=box(.35,.13,1.6,0xffffff);
+      yline.position.set(
+        cx+Math.cos(a)*(oR+.8)+Math.cos(a+Math.PI/2)*i*2,.26,
+        cz+Math.sin(a)*(oR+.8)+Math.sin(a+Math.PI/2)*i*2
+      );
+      yline.rotation.y=a+Math.PI/2; world.add(yline);
+    }
+
+    // Zebra crossing on approach
+    buildZebra(
+      cx+Math.cos(a)*(oR+9),
+      cz+Math.sin(a)*(oR+9),
+      Math.abs(Math.cos(a))>.7?'ew':'ns'
+    );
+  });
+}
+
+// -- PARKING LOTS ---------------------------------------------
+function buildParkingLots(){
+  // ANGLE PARKING -- enter forward (D), exit reverse (R)
+  const ap={x:-88,z:52,w:44,d:16,bays:8};
+  const apLot=box(ap.w,.2,ap.d,0x252830); apLot.position.set(ap.x,.12,ap.z); world.add(apLot);
+  const bw=ap.w/ap.bays;
+  for(let i=0;i<=ap.bays;i++){
+    const l=box(.15,.13,ap.d,0xffffff); l.position.set(ap.x-ap.w/2+i*bw,.22,ap.z); world.add(l);
+  }
+  // Angled bay lines
+  for(let i=0;i<ap.bays;i++){
+    const la=box(.14,.13,6.5,0x888888); la.rotation.y=Math.PI/6;
+    la.position.set(ap.x-ap.w/2+(i+.5)*bw,.22,ap.z); world.add(la);
+  }
+  buildParkSign(ap.x,ap.z-ap.d/2-2,'ANGLE','D IN · R OUT');
+  // Yellow kerb at entry/exit
+  const yk1=box(ap.w+4,.28,.55,0xf5c400); yk1.position.set(ap.x,.22,ap.z-ap.d/2-.6); world.add(yk1);
+  yellowKerbs.push({x:ap.x,z:ap.z-ap.d/2-.6,hw:ap.w/2+2,hd:.9,noStop:true});
+  parkingZones.push({type:'angle',x:ap.x,z:ap.z,hw:ap.w/2,hd:ap.d/2,entryG:'D',exitG:'R'});
+
+  // PARALLEL / FLASH PARKING -- enter reverse (R), exit forward (D)
+  const pp={x:44,z:60,w:60,d:7,bays:8};
+  const ppLot=box(pp.w,.2,pp.d,0x252830); ppLot.position.set(pp.x,.12,pp.z); world.add(ppLot);
+  const bw2=pp.w/pp.bays;
+  for(let i=0;i<=pp.bays;i++){const l=box(.15,.13,pp.d,0xffffff);l.position.set(pp.x-pp.w/2+i*bw2,.22,pp.z);world.add(l);}
+  [-pp.d/2,pp.d/2].forEach(dz=>{const sl=box(pp.w,.13,.2,0xffffff);sl.position.set(pp.x,.22,pp.z+dz);world.add(sl);});
+  buildParkSign(pp.x,pp.z-pp.d/2-2,'PARALLEL','R IN · D OUT');
+  parkingZones.push({type:'parallel',x:pp.x,z:pp.z,hw:pp.w/2,hd:pp.d/2,entryG:'R',exitG:'D'});
+}
+
+function buildParkSign(x,z,type,sub){
+  const p=cyl(.12,.12,3,8,0x556677); p.position.set(x,1.5,z); world.add(p);
+  const b=box(7,1.8,.15,0x1a3a6a); b.position.set(x,3.3,z); world.add(b);
+  const t=box(6.5,.3,.16,0x4477aa); t.position.set(x,4.25,z); world.add(t);
+}
+
+// -- ENVIRONMENT ----------------------------------------------
+function buildEnvironment(){
+  [[85,65,18,32,14,0x8a9eb8],[-105,65,22,42,16,0x7a8e9a],[85,-82,15,26,12,0x9aab8a],
+   [-105,-82,20,36,18,0xa09080],[85,22,12,21,10,0x886ea0],[-32,72,16,23,14,0x9a7060],
+   [18,-82,14,19,11,0x708090],[-32,-82,18,29,15,0x607060],[100,-10,10,16,8,0x778899]]
+  .forEach(([x,z,w,h,d,col])=>{
+    const b2=box(w,h,d,col); b2.position.set(x,h/2,z); world.add(b2);
+    const rf=box(w+.7,.9,d+.7,dk(col,.72)); rf.position.set(x,h+.45,z); world.add(rf);
+  });
+  // Trees
+  [
+    [110,45],[110,-45],[110,5],[110,-20],[110,25],
+    [-125,45],[-125,-45],[-125,5],[25,60],[45,60],[-12,60],
+    [25,-70],[45,-70],[65,-70],[-5,50],[-5,-55]
+  ].forEach(([x,z])=>addTree(x,z));
+  // Street lights
+  for(let x=-120;x<=120;x+=18){addSL(x,C.MAJ_UPPER_Z-6);addSL(x,C.MAJ_LOWER_Z+6);}
+  for(let z=-120;z<=120;z+=18){addSL(C.MAJ_LEFT_X-5,z);addSL(C.MAJ_RIGHT_X+5,z);}
+}
+function addTree(x,z){
+  const t=cyl(.35,.46,3,8,0x5c3d1e); t.position.set(x,1.5,z); world.add(t);
+  const c=cyl(2.8,.4,5,8,0x2d7a2d); c.position.set(x,5.5,z); world.add(c);
+}
+function addSL(x,z){
+  const p=cyl(.1,.1,7,8,0x556677); p.position.set(x,3.5,z); world.add(p);
+  const h=box(1,.4,.5,0x334455); h.position.set(x,7.1,z); world.add(h);
+}
+
+// -- SIGNS ----------------------------------------------------
+function buildAllSigns(){
+  // MANDATORY -- KEEP LEFT signs on major road (blue circles)
+  [{x:-40,z:C.MAJ_UPPER_Z-7},{x:30,z:C.MAJ_UPPER_Z-7},{x:-40,z:C.MAJ_LOWER_Z+7},{x:30,z:C.MAJ_LOWER_Z+7}]
+  .forEach(p=>world.add(buildMandatorySign(p.x,p.z,'KL')));
+  // NO U-TURN on major road (red circle)
+  [{x:-20,z:C.MAJ_UPPER_Z-7}].forEach(p=>{
+    world.add(buildNoUTurnSign(p.x,p.z)); noUTurnZones.push({x:p.x,z:p.z,r:10});
+  });
+  // Traffic lights at main intersection
+  const jx=(C.MAJ_LEFT_X+C.MAJ_RIGHT_X)/2;
+  buildTLSet(jx-10,C.MAJ_MID_Z-10, 0);
+  buildTLSet(jx+10,C.MAJ_MID_Z-10, Math.PI);
+  buildTLSet(jx-10,C.MAJ_MID_Z+10, 0);
+  buildTLSet(jx+10,C.MAJ_MID_Z+10, Math.PI);
+}
+
+function buildTLSet(x,z,rot){
+  const g=new THREE.Group();
+  const p=cyl(.12,.12,6.5,8,0x333333); p.position.y=3.25; g.add(p);
+  const hous=box(.72,2.4,.55,0x111111); hous.position.set(0,7,0); g.add(hous);
+  const rL=cyl(.22,.22,.12,12,0xff2200); rL.rotation.x=Math.PI/2; rL.position.set(0,8.1,-.3); g.add(rL);
+  const raL=cyl(.22,.22,.12,12,0x443300); raL.rotation.x=Math.PI/2; raL.position.set(0,7.4,-.3); g.add(raL);
+  const gL=cyl(.22,.22,.12,12,0x004400); gL.rotation.x=Math.PI/2; gL.position.set(0,6.7,-.3); g.add(gL);
+  const aL=cyl(.22,.22,.12,12,0x443300); aL.rotation.x=Math.PI/2; aL.position.set(0,6.0,-.3); g.add(aL);
+  g.position.set(x,0,z); g.rotation.y=rot;
+  world.add(g);
+  trafficLights.push({r:rL,ra:raL,g:gL,a:aL,state:'red',timer:0,offset:trafficLights.length*2.8,pos:new THREE.Vector3(x,0,z)});
+}
+
+function buildStopSignPost(x,z,rot){
+  const g=new THREE.Group();
+  const p=cyl(.09,.09,3.6,8,0x888888); p.position.y=1.8; g.add(p);
+  const s=new THREE.Mesh(new THREE.CylinderGeometry(.46,.46,.09,8),mat(0xcc0000));
+  s.position.y=3.9; s.rotation.y=Math.PI/8; g.add(s);
+  const sb=cyl(.49,.49,.07,8,0xffffff); sb.position.y=3.87; sb.rotation.y=Math.PI/8; g.add(sb);
+  g.position.set(x,0,z); g.rotation.y=rot; return g;
+}
+
+function buildYieldSign(x,z,rot){
+  const g=new THREE.Group();
+  const p=cyl(.09,.09,2.8,8,0x888888); p.position.y=1.4; g.add(p);
+  // Inverted triangle
+  const shape=new THREE.Shape();
+  shape.moveTo(0,.45); shape.lineTo(-.4,-.25); shape.lineTo(.4,-.25); shape.closePath();
+  const geo=new THREE.ShapeGeometry(shape);
+  const sm=new THREE.Mesh(geo,mat(0xdd0000,{side:THREE.DoubleSide}));
+  sm.rotation.x=-Math.PI/2; sm.position.set(0,3,.0); sm.scale.set(1.8,1.8,1.8); g.add(sm);
+  const border=new THREE.Mesh(geo,mat(0xffffff,{side:THREE.DoubleSide}));
+  border.rotation.x=-Math.PI/2; border.position.set(0,2.95,0); border.scale.set(2,2,2); g.add(border);
+  g.position.set(x,0,z); g.rotation.y=rot; return g;
+}
+
+function buildMandatorySign(x,z,type){
+  const g=new THREE.Group();
+  const p=cyl(.09,.09,3,8,0x888888); p.position.y=1.5; g.add(p);
+  const disc=cyl(.4,.4,.08,20,0x0044cc); disc.rotation.x=Math.PI/2; disc.position.set(0,3.1,0); g.add(disc);
+  const arr=box(.06,.06,.5,0xffffff); arr.position.set(0,3.1,-.1); arr.rotation.z=Math.PI/4; g.add(arr);
+  g.position.set(x,0,z); return g;
+}
+
+function buildNoEntrySign(x,z){
+  const g=new THREE.Group();
+  const p=cyl(.09,.09,3,8,0x888888); p.position.y=1.5; g.add(p);
+  const disc=cyl(.44,.44,.09,20,0xcc0000); disc.rotation.x=Math.PI/2; disc.position.set(0,3.2,0); g.add(disc);
+  const bar=box(.65,.08,.1,0xffffff); bar.position.set(0,3.2,-.06); g.add(bar);
+  g.position.set(x,0,z); return g;
+}
+
+function buildNoUTurnSign(x,z){
+  const g=new THREE.Group();
+  const p=cyl(.09,.09,3,8,0x888888); p.position.y=1.5; g.add(p);
+  const disc=cyl(.44,.44,.09,20,0xffffff); disc.rotation.x=Math.PI/2; disc.position.set(0,3.2,0); g.add(disc);
+  const ring=cyl(.44,.44,.1,20,0xcc0000); ring.rotation.x=Math.PI/2; ring.position.set(0,3.2,-.01);
+  const inner=cyl(.3,.3,.12,20,0xffffff); inner.rotation.x=Math.PI/2; inner.position.set(0,3.2,-.02);
+  g.add(ring,inner);
+  const diag=box(.08,.08,.88,0xcc0000); diag.position.set(0,3.2,-.07); diag.rotation.z=Math.PI/4; g.add(diag);
+  g.position.set(x,0,z); return g;
+}
+
+function buildDestGroup(){
+  const g=new THREE.Group();
+  const base=box(5,.18,5,0x00ff88); base.position.y=.22; g.add(base);
+  const pole=cyl(.1,.1,4.5,8,0x00ff88); pole.position.y=2.25; g.add(pole);
+  const flag=box(2.2,1.2,.12,0x00ff88); flag.position.set(1.1,5,0); g.add(flag);
+  return g;
+}
+
+// -- PLAYER CAR -----------------------------------------------
+let playerCar=null;
+function buildPlayerCar(color=0x1166ee){
+  if(playerCar)scene.remove(playerCar);
+  // Outer group: position + heading controlled by physics
+  const g=new THREE.Group();
+  // Inner pivot rotated PI so headlights face +Z, matching sin/cos movement
+  const p=new THREE.Group();
+  p.rotation.y=Math.PI;
+  g.add(p);
+  const body=box(2.1,.75,4.4,color); body.position.y=.55; p.add(body);
+  const cab=box(1.8,.65,2.3,color); cab.position.set(0,1.2,.15); p.add(cab);
+  const winM=mat(0x99ccff,{transparent:true,opacity:.45});
+  [[0,1.22,-1.22,1.55,.48,.06],[0,1.22,1.35,1.55,.48,.06]].forEach(([x,y,z,w,h,d])=>{
+    const win=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),winM);
+    win.position.set(x,y,z); p.add(win);
+  });
+  [[1.0,0,-1.5],[-1.0,0,-1.5],[1.0,0,1.5],[-1.0,0,1.5]].forEach(([wx,wy,wz],i)=>{
+    const wh=cyl(.38,.38,.28,16,0x1a1a1a); wh.rotation.z=Math.PI/2; wh.position.set(wx,wy,wz); wh.name=`w${i}`; p.add(wh);
+    const hub=cyl(.2,.2,.3,8,0x666666); hub.rotation.z=Math.PI/2; hub.position.set(wx,wy,wz); p.add(hub);
+  });
+  [[-0.65,.5,-2.25],[0.65,.5,-2.25]].forEach(([x,y,z])=>{
+    const hl=new THREE.Mesh(new THREE.BoxGeometry(.35,.22,.1),mat(0xffffdd)); hl.position.set(x,y,z); p.add(hl);
+  });
+  [[-0.65,.5,2.25],[0.65,.5,2.25]].forEach(([x,y,z])=>{
+    const tl=new THREE.Mesh(new THREE.BoxGeometry(.35,.22,.1),mat(0xff1100)); tl.position.set(x,y,z); p.add(tl);
+  });
+  [[-0.72,.5,-2.2],[-0.72,.5,2.2],[0.72,.5,-2.2],[0.72,.5,2.2]].forEach(([x,y,z])=>{
+    const side=x>0?'R':'L';
+    const sig=new THREE.Mesh(new THREE.BoxGeometry(.2,.15,.08),mat(0x222200).clone());
+    sig.position.set(x,y,z); sig.name=`sig_${side}`; p.add(sig);
+  });
+  g.position.y=.38; scene.add(g); return g;
+}
+
+// -- AI TRAFFIC -----------------------------------------------
+const aiVehicles=[];
+const AI_ROUTES=[
+  {pts:[new THREE.Vector3(-140,.38,C.MAJ_UPPER_Z-5.25),new THREE.Vector3(140,.38,C.MAJ_UPPER_Z-5.25)],spd:9.5,loop:true},
+  {pts:[new THREE.Vector3(-140,.38,C.MAJ_UPPER_Z-1.75),new THREE.Vector3(140,.38,C.MAJ_UPPER_Z-1.75)],spd:11,loop:true},
+  {pts:[new THREE.Vector3(140,.38,C.MAJ_LOWER_Z+5.25),new THREE.Vector3(-140,.38,C.MAJ_LOWER_Z+5.25)],spd:10,loop:true},
+  {pts:[new THREE.Vector3(140,.38,C.MAJ_LOWER_Z+1.75),new THREE.Vector3(-140,.38,C.MAJ_LOWER_Z+1.75)],spd:8.5,loop:true},
+  // 4 roundabout AI lanes - centres at iR + laneW*0.5 steps
+  {rdt:true,cx:C.RDT_X,cz:C.RDT_Z,r:13.5,spd:4.2,lane:1}, // Lane 1 - outermost
+  {rdt:true,cx:C.RDT_X,cz:C.RDT_Z,r:16.5,spd:5.0,lane:2}, // Lane 2
+  {rdt:true,cx:C.RDT_X,cz:C.RDT_Z,r:19.5,spd:5.6,lane:3}, // Lane 3
+  {rdt:true,cx:C.RDT_X,cz:C.RDT_Z,r:22.5,spd:6.2,lane:4}, // Lane 4 - innermost
+  {pts:[new THREE.Vector3(-90,.38,C.MIN_H_Z+1),new THREE.Vector3(90,.38,C.MIN_H_Z+1)],spd:6.5,loop:true},
+  {pts:[new THREE.Vector3(90,.38,C.MIN_H_Z-1),new THREE.Vector3(-90,.38,C.MIN_H_Z-1)],spd:7,loop:true},
+  {pts:[new THREE.Vector3(C.MAJ_LEFT_X-5,.38,-120),new THREE.Vector3(C.MAJ_LEFT_X-5,.38,120)],spd:9,loop:true},
+  {pts:[new THREE.Vector3(C.MAJ_RIGHT_X+5,.38,120),new THREE.Vector3(C.MAJ_RIGHT_X+5,.38,-120)],spd:8,loop:true},
+];
+const AICOLORS=[0xff2200,0x22aa44,0xffaa00,0x8844cc,0x00aaff,0xff6688,0x44ffcc,0xff8800,0xffffff,0x884422];
+
+function spawnAI(n){
+  aiVehicles.forEach(v=>scene.remove(v.m)); aiVehicles.length=0;
+  // Track how many roundabout cars we have to stagger their start angles
+  let rdtCount=0;
+  for(let i=0;i<Math.min(n,AI_ROUTES.length);i++){
+    const rt=AI_ROUTES[i];
+    const m=buildAiCar(AICOLORS[i%AICOLORS.length]);
+    let startAng=0;
+    if(rt.rdt){
+      // Stagger each roundabout car evenly so they never overlap at spawn
+      startAng=(rdtCount/4)*Math.PI*2;
+      rdtCount++;
+      // Lock position exactly on lane-centre radius
+      m.position.set(rt.cx+Math.cos(startAng)*rt.r,.38,rt.cz+Math.sin(startAng)*rt.r);
+    } else {
+      const pr=Math.random();
+      m.position.lerpVectors(rt.pts[0],rt.pts[1],pr);
+    }
+    // Speed variation ±10% only so cars stay in their lane band
+    aiVehicles.push({m,rt,pr:0,ang:startAng,spd:rt.spd*(0.95+Math.random()*.1)});
+  }
+}
+function buildAiCar(color){
+  const g=new THREE.Group();
+  const b=box(1.9,.65,4.,color); b.position.y=.5; g.add(b);
+  const c=box(1.6,.6,2.,color); c.position.set(0,1.1,.1); g.add(c);
+  [[1,0,-1.4],[-1,0,-1.4],[1,0,1.4],[-1,0,1.4]].forEach(([x,y,z])=>{
+    const w=cyl(.35,.35,.26,12,0x1a1a1a); w.rotation.z=Math.PI/2; w.position.set(x,y,z); g.add(w);
+  });
+  scene.add(g); return g;
+}
+function updateAI(dt){
+  aiVehicles.forEach(v=>{
+    if(v.rt.rdt){
+      // Clockwise = angle decreasing in Three.js (x=cos, z=sin convention)
+      v.ang-=(v.spd/v.rt.r)*dt;
+      v.m.position.set(v.rt.cx+Math.cos(v.ang)*v.rt.r,.38,v.rt.cz+Math.sin(v.ang)*v.rt.r);
+      // Clockwise tangent heading: at angle a, tangent direction is a - PI/2
+      // Car front is -Z so rotation.y = tangent angle in world space
+      // movement dir = (−sin(a), cos(a)) clockwise → atan2 of that
+      // Clockwise tangent: vel=(sin(ang),-cos(ang)), atan2 gives correct heading
+      v.m.rotation.y=Math.atan2(Math.sin(v.ang),-Math.cos(v.ang));
+    } else {
+      v.pr+=(v.spd*dt)/v.rt.pts[0].distanceTo(v.rt.pts[1]);
+      if(v.pr>1)v.pr=v.rt.loop?0:1;
+      v.m.position.lerpVectors(v.rt.pts[0],v.rt.pts[1],v.pr);
+      const dir=new THREE.Vector3().subVectors(v.rt.pts[1],v.rt.pts[0]).normalize();
+      v.m.rotation.y=Math.atan2(dir.x,dir.z);
+    }
+  });
+}
+
+// -- PEDESTRIANS ----------------------------------------------
+const peds=[];
+const PED_CROSSING_POINTS=[
+  {x:(C.MAJ_LEFT_X+C.MAJ_RIGHT_X)/2,z:C.MAJ_MID_Z-12,axis:'x'},
+  {x:(C.MAJ_LEFT_X+C.MAJ_RIGHT_X)/2-12,z:C.MAJ_MID_Z,axis:'z'},
+  {x:0,z:C.MIN_H_Z-8,axis:'x'},
+  {x:C.MIN_V_X,z:20,axis:'z'},
+  {x:C.RDT_X,z:C.RDT_Z-C.RDT_OUTER-8,axis:'x'},
+];
+function spawnPeds(n){
+  peds.forEach(p=>scene.remove(p.m)); peds.length=0;
+  for(let i=0;i<n;i++){
+    const g=new THREE.Group();
+    const body=cyl(.22,.22,1.,8,0x885533+(i*0x101010&0x202020)); body.position.y=.5; g.add(body);
+    const head=cyl(.18,.18,.3,8,0xffccaa); head.position.y=1.2; g.add(head);
+    const arm1=box(.18,.18,.7,0x885533); arm1.position.set(.35,.8,0); arm1.rotation.z=.4; g.add(arm1);
+    const arm2=arm1.clone(); arm2.position.x=-.35; arm2.rotation.z=-.4; g.add(arm2);
+    const cp=PED_CROSSING_POINTS[i%PED_CROSSING_POINTS.length];
+    const startOffset=(Math.random()>.5?1:-1)*(5+Math.random()*3);
+    g.position.set(cp.axis==='x'?cp.x+startOffset:cp.x, 0, cp.axis==='z'?cp.z+startOffset:cp.z);
+    scene.add(g);
+    peds.push({m:g,cp,dir:Math.random()>.5?1:-1,t:i*2+Math.random()*6,crossing:false,
+               onCrossing:false,startX:g.position.x,startZ:g.position.z});
+  }
+}
+function updatePeds(dt){
+  peds.forEach(p=>{
+    p.t-=dt;
+    if(p.t<0){p.crossing=!p.crossing;p.t=4+Math.random()*10;}
+    const prevX=p.m.position.x, prevZ=p.m.position.z;
+    if(p.crossing){
+      if(p.cp.axis==='x')p.m.position.x+=p.dir*.9*dt;
+      else p.m.position.z+=p.dir*.9*dt;
+    } else {
+      if(p.cp.axis==='x')p.m.position.z+=Math.sin(sessTime*.8+p.t)*.01;
+      else p.m.position.x+=Math.sin(sessTime*.8+p.t)*.01;
+    }
+    // Bounce back
+    const offset=p.cp.axis==='x'?Math.abs(p.m.position.x-p.cp.x):Math.abs(p.m.position.z-p.cp.z);
+    if(offset>14){p.dir*=-1;}
+    // Check if on zebra
+    p.onCrossing=false;
+    zebras.forEach(z=>{
+      if(z.axis==='x'&&Math.abs(p.m.position.z-z.cz)<5&&Math.abs(p.m.position.x-z.cx)<z.w/2)p.onCrossing=true;
+      if(z.axis==='ns'&&Math.abs(p.m.position.x-z.cx)<5&&Math.abs(p.m.position.z-z.cz)<z.d/2)p.onCrossing=true;
+    });
+  });
+}
+
+// -- PHYSICS --------------------------------------------------
+const keys={};
+let sigL=false,sigR=false,sigTimer=0,hornOn=false;
+const ph={speed:0,heading:0,steer:0,gear:'N',braking:false};
+
+window.addEventListener('keydown',e=>{
+  keys[e.code]=true;
+  if(e.code==='KeyQ'){sigL=!sigL;sigR=false;updSigUI();}
+  if(e.code==='KeyE'){sigR=!sigR;sigL=false;updSigUI();}
+  if(e.code==='KeyH'){hornOn=true;hornTrigger();}
+  if(e.code==='KeyC')cycleCam();
+  if(e.code==='Digit1')setGear('R');
+  if(e.code==='Digit2')setGear('N');
+  if(e.code==='Digit3')setGear('D');
+});
+window.addEventListener('keyup',e=>{
+  keys[e.code]=false;
+  if(e.code==='KeyH'){hornOn=false;document.getElementById('ih').classList.remove('on');}
+});
+
+function updSigUI(){
+  document.getElementById('il').classList.toggle('lon',sigL);
+  document.getElementById('ir').classList.toggle('ron',sigR);
+}
+function setGear(g){
+  ph.gear=g;
+  document.querySelectorAll('.gi').forEach(el=>el.classList.toggle('active',el.dataset.g===g));
+}
+function hornTrigger(){
+  document.getElementById('ih').classList.add('on');
+  // Check if near pedestrian crossing -- penalty
+  if(playerCar&&gameRunning){
+    peds.forEach(p=>{
+      if(p.onCrossing&&playerCar.position.distanceTo(p.m.position)<12){
+        addViol('Horn used at pedestrian crossing -- intimidation!',C.PENALTIES.PED_HORN,'📢');
+      }
+    });
+  }
+}
+
+function physicsStep(dt,sc){
+  if(!playerCar||!gameRunning)return;
+  const fwd=keys['ArrowUp']||keys['KeyW'];
+  const bwd=keys['ArrowDown']||keys['KeyS'];
+  const lft=keys['ArrowLeft']||keys['KeyA'];
+  const rgt=keys['ArrowRight']||keys['KeyD'];
+  const brk=keys['Space'];
+
+  const inPark=inParkingZone();
+  const inRdt=inRoundabout();
+  const inMin=onMinorRoad();
+  const cap=inPark?C.SPD_PARK:inRdt?C.SPD_RDT:inMin?C.SPD_MIN:C.SPD_MAJ;
+
+  if(ph.gear==='D'&&fwd) ph.speed=Math.min(ph.speed+C.ACCEL*dt,cap);
+  else if(ph.gear==='R'&&bwd) ph.speed=Math.max(ph.speed-C.ACCEL*.6*dt,-cap*.3);
+  else if(brk) ph.speed=ph.speed>0?Math.max(0,ph.speed-C.BRAKE*dt):Math.min(0,ph.speed+C.BRAKE*dt);
+  else ph.speed*=Math.pow(.88,dt*30);
+
+  const ss=1-Math.min(Math.abs(ph.speed)/cap,1)*.45;
+  if(lft) ph.steer=Math.max(ph.steer-C.STEER*dt*ss,-C.MAX_STEER);
+  else if(rgt) ph.steer=Math.min(ph.steer+C.STEER*dt*ss,C.MAX_STEER);
+  else ph.steer*=Math.pow(.82,dt*30);
+
+  if(Math.abs(ph.speed)>.1) ph.heading-=ph.steer*(ph.speed/cap)*dt*2.9;
+  playerCar.position.x+=Math.sin(ph.heading)*ph.speed*dt;
+  playerCar.position.z+=Math.cos(ph.heading)*ph.speed*dt;
+  playerCar.position.y=.38;
+  playerCar.rotation.y=ph.heading;
+  // Wheels are inside the inner pivot group
+  playerCar.children.forEach(pivot=>{
+    pivot.children&&pivot.children.forEach(c=>{if(c.name&&c.name[0]==='w')c.rotation.x+=ph.speed*dt*2.6;});
+  });
+
+  // Signal blink
+  sigTimer+=dt;
+  if(sigTimer>.48){sigTimer=0;blinkSig();}
+  ph.braking=brk;
+  document.getElementById('ib').classList.toggle('on',brk&&Math.abs(ph.speed)>.4);
+
+  // Clamp
+  playerCar.position.x=Math.max(-145,Math.min(145,playerCar.position.x));
+  playerCar.position.z=Math.max(-145,Math.min(145,playerCar.position.z));
+  distTrav+=Math.abs(ph.speed)*dt;
+}
+
+function blinkSig(){
+  function forEachCarChild(cb){playerCar&&playerCar.children.forEach(pivot=>{pivot.children&&pivot.children.forEach(cb);});}
+  if(sigL)forEachCarChild(c=>{if(c.name==='sig_L')c.material.color.setHex(c.material.color.getHex()===0xff8800?0x222200:0xff8800);});
+  if(sigR)forEachCarChild(c=>{if(c.name==='sig_R')c.material.color.setHex(c.material.color.getHex()===0xff8800?0x222200:0xff8800);});
+}
+
+function inRoundabout(){
+  if(!playerCar)return false;
+  const dx=playerCar.position.x-C.RDT_X,dz=playerCar.position.z-C.RDT_Z;
+  return Math.sqrt(dx*dx+dz*dz)<C.RDT_OUTER+3;
+}
+function inParkingZone(){
+  if(!playerCar)return false;
+  return parkingZones.some(pz=>Math.abs(playerCar.position.x-pz.x)<pz.hw&&Math.abs(playerCar.position.z-pz.z)<pz.hd);
+}
+function onMinorRoad(){
+  if(!playerCar)return false;
+  return Math.abs(playerCar.position.z-C.MIN_H_Z)<C.MIN_W||Math.abs(playerCar.position.x-C.MIN_V_X)<C.MIN_W;
+}
+
+// -- LANE DETECTION -------------------------------------------
+function detectLane(){
+  if(!playerCar)return{roadType:'off',lane:0};
+  const pos=playerCar.position;
+  const hw=C.MAJ_W/2, lw=C.MAJ_LW;
+
+  // EW major roads
+  if(Math.abs(pos.z-C.MAJ_UPPER_Z)<hw){
+    const relZ=pos.z-(C.MAJ_UPPER_Z-hw);
+    const lane=Math.min(C.MAJ_LANES,Math.max(1,Math.ceil(relZ/lw)));
+    return{roadType:'major',road:'EW_upper',lane};
+  }
+  if(Math.abs(pos.z-C.MAJ_LOWER_Z)<hw){
+    const relZ=pos.z-(C.MAJ_LOWER_Z-hw);
+    const lane=Math.min(C.MAJ_LANES,Math.max(1,Math.ceil(relZ/lw)));
+    return{roadType:'major',road:'EW_lower',lane};
+  }
+  // Minor
+  if(Math.abs(pos.z-C.MIN_H_Z)<C.MIN_W/2){
+    const relZ=pos.z-(C.MIN_H_Z-C.MIN_W/2);
+    const lane=Math.min(C.MIN_LANES,Math.max(1,Math.ceil(relZ/C.MIN_LW)));
+    return{roadType:'minor',road:'EW_minor',lane};
+  }
+  return{roadType:'other',lane:0};
+}
+
+// -- TRAFFIC LIGHT UPDATE (4-PHASE KENYAN SEQUENCE) -----------
+/*  Phase sequence: RED -> RED+AMBER -> GREEN -> AMBER
+    Red:5s  Red+Amber:1.5s  Green:5s  Amber:2s  */
+const TL_PHASES=[
+  {name:'RED -- STOP',dur:5,r:true,ra:false,g:false,a:false},
+  {name:'RED+AMBER -- PREPARE',dur:1.5,r:true,ra:true,g:false,a:false},
+  {name:'GREEN -- PROCEED',dur:5,r:false,ra:false,g:true,a:false},
+  {name:'AMBER -- STOP SAFELY',dur:2,r:false,ra:false,g:false,a:true},
+];
+const TL_CYCLE=TL_PHASES.reduce((s,p)=>s+p.dur,0);
+
+function updateTLights(dt){
+  trafficLights.forEach((tl,i)=>{
+    tl.timer+=dt;
+    const t=(tl.timer+tl.offset)%TL_CYCLE;
+    let cum=0,phase=TL_PHASES[0];
+    for(const p of TL_PHASES){cum+=p.dur;if(t<cum){phase=p;break;}}
+    tl.state=phase.name.includes('GREEN')?'green':phase.name.includes('AMBER')&&!phase.name.includes('RED')?'amber':phase.name.includes('RED+AMBER')?'ra':'red';
+    tl.r.material.color.setHex(phase.r?0xff2200:0x220000);
+    tl.ra.material.color.setHex(phase.ra?0xffaa00:0x332200);
+    tl.g.material.color.setHex(phase.g?0x00ff44:0x003300);
+    tl.a.material.color.setHex(phase.a?0xffaa00:0x332200);
+    // Update phase display for nearest TL
+    if(i===0)updateTLPhaseHUD(tl.state,phase.name);
+  });
+}
+
+function updateTLPhaseHUD(state,name){
+  document.getElementById('tlp-r').style.background=state==='red'||state==='ra'?'#ff2200':'#220000';
+  document.getElementById('tlp-ra').style.background=state==='ra'?'#ffaa00':'#332200';
+  document.getElementById('tlp-g').style.background=state==='green'?'#00ff44':'#003300';
+  document.getElementById('tlp-a').style.background=state==='amber'?'#ffaa00':'#332200';
+  document.getElementById('tlp-txt').textContent=name.split('--')[0].trim();
+}
+
+// -- VIOLATIONS ENGINE -----------------------------------------
+let score=100,totalV=0,sessionFb=[],distTrav=0,sessTime=0;
+const cds={};
+let prevRdtLane=-1,stopHeldTime=0,lastNearStop=-1;
+let pedZoneActive=false;
+
+function coolOf(k){return(cds[k]||0)>sessTime;}
+function setCool(k,d=3){cds[k]=sessTime+d;}
+
+function checkViolations(dt,sc){
+  if(!playerCar||!gameRunning)return;
+  const pos=playerCar.position;
+  const spd=Math.abs(ph.speed),skmh=spd*3.6;
+
+  // --- 1. SPEEDING ---
+  if(!coolOf('spd')){
+    const lim=inRoundabout()?20:onMinorRoad()?30:sc.speedLimit;
+    if(skmh>lim*1.08){addViol(`Speed ${skmh.toFixed(0)} km/h in ${lim} zone`,C.PENALTIES.SPEEDING,'⚡');setCool('spd',2.5);}
+  }
+
+  // --- 2. TRAFFIC LIGHT -- 4-PHASE ---
+  trafficLights.forEach((tl,i)=>{
+    const d=pos.distanceTo(tl.pos);
+    if(d<10){
+      // Red: must stop
+      if(tl.state==='red'&&spd>1.2&&!coolOf(`rl_${i}`)){
+        addViol('Red light -- must stop completely!',C.PENALTIES.RED_LIGHT,'🔴');setCool(`rl_${i}`,4);
+      }
+      // Amber: must stop unless past line
+      if(tl.state==='amber'&&spd>1&&d>5&&!coolOf(`al_${i}`)){
+        addViol('Amber light -- stop unless past stop line!',C.PENALTIES.RED_LIGHT/2,'🟡');setCool(`al_${i}`,3);
+      }
+      // Red+Amber: stay stopped
+      if(tl.state==='ra'&&spd>1&&!coolOf(`ral_${i}`)){
+        addViol('Red+Amber -- stay stopped, prepare only!',C.PENALTIES.RED_LIGHT/2,'🟠');setCool(`ral_${i}`,3);
+      }
+      // Green: if was red and now moving, positive
+      if(tl.state==='green'&&spd>.5&&!coolOf(`go_${i}`)){
+        if(!coolOf(`tl_pass_${i}`)){logEvt('✓ Correct green light proceed',true);setCool(`tl_pass_${i}`,8);}
+      }
+    }
+  });
+
+  // --- 3. STOP SIGN -- full 3-second stop ---
+  stopSigns.forEach((ss,i)=>{
+    const d=Math.sqrt((pos.x-ss.x)**2+(pos.z-ss.z)**2);
+    if(d<ss.r){
+      if(spd<.2){
+        ss.stopHeld=(ss.stopHeld||0)+dt;
+        if(ss.stopHeld>=C.STOP_SEC&&!ss.passed){
+          ss.passed=true;logEvt('✓ Full 3-second stop at STOP sign',true);
+        }
+      } else {
+        ss.stopHeld=0;
+        if(!ss.passed&&!coolOf(`ss_${i}`)&&d<ss.r*.7){
+          addViol('Failed full 3-second stop at STOP sign!',C.PENALTIES.NO_STOP,'🛑');setCool(`ss_${i}`,5);
+        }
+      }
+    } else {
+      ss.stopHeld=0; ss.passed=false;
+    }
+  });
+
+  // --- 4. GIVE WAY / YIELD -- check if forcing AI to brake ---
+  yieldSigns.forEach((ys,i)=>{
+    const d=Math.sqrt((pos.x-ys.x)**2+(pos.z-ys.z)**2);
+    if(d<ys.r&&spd>2){
+      // Check if any AI in roundabout is close (simulates forcing them to slow)
+      if(ys.isRoundabout){
+        aiVehicles.filter(v=>v.rt.rdt).forEach(v=>{
+          const ad=pos.distanceTo(v.m.position);
+          if(ad<8&&!coolOf(`yield_${i}`)){
+            addViol('Failed to yield to roundabout traffic!',C.PENALTIES.NO_YIELD,'⚠️');setCool(`yield_${i}`,4);
+          }
+        });
+      }
+    }
+  });
+
+  // --- 5. WRONG WAY -- ONE-WAY ROADS ---
+  if(!coolOf('ww')){
+    const onEW=Math.abs(pos.z-C.MAJ_MID_Z)<C.MAJ_W*.9;
+    if(onEW){
+      const upper=pos.z<C.MAJ_MID_Z;
+      // heading PI/2 = east (+X), -PI/2 = west (-X)
+      const goE=Math.sin(ph.heading)>0.3, goW=Math.sin(ph.heading)<-0.3;
+      if(((upper&&goW)||(!upper&&goE))&&spd>1){
+        addViol('Wrong way on one-way road!',C.PENALTIES.WRONG_WAY,'⛔');setCool('ww',4);
+      }
+    }
+  }
+
+  // --- 6. YELLOW CENTRE LINE CROSSING (wall) ---
+  if(!coolOf('ylc')){
+    yellowKerbs.forEach(yk=>{
+      if(!yk.isCentreLine)return;
+      const dx=Math.abs(pos.x-yk.x),dz=Math.abs(pos.z-yk.z);
+      if(dx<yk.hw&&dz<yk.hd){
+        addViol('Crossed yellow centre line -- critical error!',C.PENALTIES.YLW_LINE,'🟡');setCool('ylc',4);
+      }
+    });
+  }
+
+  // --- 7. YELLOW KERB -- NO STOPPING ---
+  if(!coolOf('ykstop')){
+    yellowKerbs.forEach(yk=>{
+      if(!yk.noStop)return;
+      const dx=Math.abs(pos.x-yk.x),dz=Math.abs(pos.z-yk.z);
+      if(dx<yk.hw&&dz<yk.hd&&spd<.2&&sessTime>3){
+        addViol('Stopped on yellow kerb -- no stopping zone!',C.PENALTIES.YLW_KERB,'🟡');setCool('ykstop',4);
+      }
+    });
+  }
+
+  // --- 8. SOLID WHITE LINE -- NO CROSSING ---
+  if(!coolOf('swl')){
+    // Simplified: detect if car is on edge of road (white edge line)
+    const onRoad=Math.abs(pos.z-C.MAJ_UPPER_Z)<C.MAJ_W/2||Math.abs(pos.z-C.MAJ_LOWER_Z)<C.MAJ_W/2;
+    if(onRoad){
+      const edgeLeft=C.MAJ_UPPER_Z-C.MAJ_W/2, edgeRight=C.MAJ_UPPER_Z+C.MAJ_W/2;
+      if((pos.z<edgeLeft+.3||pos.z>edgeRight-.3)&&spd>1){
+        addViol('Crossed solid white edge line!',C.PENALTIES.CONT_WHITE_CROSS,'🚧');setCool('swl',4);
+      }
+    }
+  }
+
+  // --- 9. ROUNDABOUT RULES ---
+  if(inRoundabout()){
+    const dx=pos.x-C.RDT_X,dz=pos.z-C.RDT_Z;
+    const dist=Math.sqrt(dx*dx+dz*dz);
+    const ang=Math.atan2(dz,dx);
+    // 4-lane detection: laneW=3, centres at 13.5,16.5,19.5,22.5
+      const lw=C.RDT_LANE_W||3;
+      const lane=dist<C.RDT_INNER+lw?1:dist<C.RDT_INNER+lw*2?2:dist<C.RDT_INNER+lw*3?3:4;
+    // Anti-clockwise
+    if(!coolOf('rw')&&spd>1){
+      const tgAng=ang+Math.PI/2;
+      const dot=Math.sin(ph.heading)*Math.cos(tgAng)+Math.cos(ph.heading)*Math.sin(tgAng);
+      if(dot<-.45){addViol('Anti-clockwise in roundabout!',C.PENALTIES.WRONG_WAY,'🔄');setCool('rw',3);}
+    }
+    // Lane change
+    if(prevRdtLane!==-1&&prevRdtLane!==lane&&spd>1&&!coolOf('rlc')){
+      addViol('Lane change inside roundabout!',C.PENALTIES.RDT_LANE_CHG,'🚫');setCool('rlc',3);
+    }
+    prevRdtLane=lane;
+
+    // Lane exit validation -- check which exit angle was chosen vs lane
+    // Stored in roundabout exit check (done when leaving roundabout)
+  } else {
+    if(prevRdtLane!==-1)checkRoundaboutExit();
+    prevRdtLane=-1;
+  }
+
+  // --- 10. LANE EXIT MAPPING ---
+  checkLaneExitCompliance();
+
+  // --- 11. PEDESTRIAN CROSSING RULES ---
+  checkPedestrianZones(dt);
+
+  // --- 12. PARKING GEAR ---
+  parkingZones.forEach((pz,i)=>{
+    const inside=Math.abs(pos.x-pz.x)<pz.hw&&Math.abs(pos.z-pz.z)<pz.hd;
+    if(inside&&!pz.wasIn&&spd>.4){
+      if(ph.gear!==pz.entryG&&!coolOf(`pe_${i}`)){
+        addViol(`Wrong entry gear for ${pz.type} parking! Need ${pz.entryG}`,C.PENALTIES.WRONG_GEAR,'🅿️');setCool(`pe_${i}`,4);
+      } else if(ph.gear===pz.entryG){logEvt(`✓ Correct entry (${pz.entryG}) -- ${pz.type}`,true);}
+    }
+    if(!inside&&pz.wasIn&&spd>.4){
+      if(ph.gear!==pz.exitG&&!coolOf(`px_${i}`)){
+        addViol(`Wrong exit gear for ${pz.type} parking! Need ${pz.exitG}`,C.PENALTIES.WRONG_GEAR,'🅿️');setCool(`px_${i}`,4);
+      } else if(ph.gear===pz.exitG){logEvt(`✓ Correct exit (${pz.exitG}) -- ${pz.type}`,true);}
+    }
+    pz.wasIn=inside;
+  });
+
+  // --- 13. SIGNALS ---
+  if(!coolOf('sig')){
+    const turning=Math.abs(ph.steer)>.42&&spd>2;
+    if(turning&&ph.steer>.35&&!sigL){addViol('No left indicator when turning!',C.PENALTIES.NO_SIGNAL,'SIG-L');setCool('sig',4);}
+    else if(turning&&ph.steer<-.35&&!sigR){addViol('No right indicator when turning!',C.PENALTIES.NO_SIGNAL,'SIG-R');setCool('sig',4);}
+  }
+
+  // --- 14. NO U-TURN ZONES ---
+  noUTurnZones.forEach((nz,i)=>{
+    const d=Math.sqrt((pos.x-nz.x)**2+(pos.z-nz.z)**2);
+    if(d<nz.r&&!coolOf(`nut_${i}`)){
+      const uturning=Math.abs(ph.steer)>0.6&&Math.abs(ph.speed)>1;
+      if(uturning){addViol('U-turn in No U-Turn zone!',C.PENALTIES.WRONG_WAY,'🔃');setCool(`nut_${i}`,5);}
+    }
+  });
+
+  // --- 15. NO ENTRY ---
+  noEntryZones.forEach((nez,i)=>{
+    const d=Math.sqrt((pos.x-nez.x)**2+(pos.z-nez.z)**2);
+    if(d<nez.r&&spd>1&&!coolOf(`ne_${i}`)){
+      addViol('Entered No Entry zone!',C.PENALTIES.WRONG_WAY,'⛔');setCool(`ne_${i}`,5);
+    }
+  });
+
+  // --- 16. AI COLLISION ---
+  aiVehicles.forEach((v,i)=>{
+    if(!coolOf(`col_${i}`)&&pos.distanceTo(v.m.position)<3.5){
+      addViol('Collision with vehicle!',C.PENALTIES.COLLISION,'💥');setCool(`col_${i}`,4);ph.speed*=-.3;
+    }
+  });
+
+  // --- 17. DESTINATION ---
+  if(destMarker&&pos.distanceTo(destMarker.position)<6&&sessTime>5)endSession(true);
+}
+
+// -- LANE EXIT COMPLIANCE -------------------------------------
+let lastKnownLane=0,lastKnownRoadType='',exitAngleRecorded=null;
+function checkLaneExitCompliance(){
+  if(!playerCar)return;
+  const ld=detectLane();
+  const kmh=Math.abs(ph.speed)*3.6;
+  if(ld.roadType!=='off'&&ld.lane>0){
+    // Update HUD
+    document.getElementById('ts-lane').textContent=`L${ld.lane}`;
+    // Update lane exit map
+    updLaneMap(ld.roadType,ld.lane);
+    // Detect wrong exit
+    if(lastKnownLane>0&&ld.lane!==lastKnownLane&&kmh>5&&!coolOf('lnchg')){
+      // Lane shift at roundabout entry: validate
+      // For now allow graceful lane changes outside roundabout
+    }
+    lastKnownLane=ld.lane; lastKnownRoadType=ld.roadType;
+  } else {
+    document.getElementById('ts-lane').textContent='--';
+  }
+}
+
+let laneMapShown='';
+function updLaneMap(roadType,activeLane){
+  if(roadType===laneMapShown)return;
+  laneMapShown=roadType;
+  const container=document.getElementById('lane-map-rows');
+  const lanes=LANE_EXITS[roadType];
+  if(!lanes){container.innerHTML='';return;}
+  container.innerHTML=Object.entries(lanes).map(([ln,opts])=>`
+    <div class="lane-row${parseInt(ln)===activeLane?' lane-active':''}">
+      <span class="lane-badge">LANE ${ln}</span>
+      <span class="lane-opts">${opts.join(' / ')}</span>
+    </div>`).join('');
+}
+
+// -- ROUNDABOUT EXIT TRACKING ---------------------------------
+let rdtEntryLane=-1,rdtEntryAngle=0;
+function checkRoundaboutExit(){
+  if(!playerCar||rdtEntryLane<0)return;
+  const pos=playerCar.position;
+  const dx=pos.x-C.RDT_X,dz=pos.z-C.RDT_Z;
+  const exitAngle=Math.atan2(dz,dx);
+  const diff=((exitAngle-rdtEntryAngle+Math.PI*3)%(Math.PI*2));
+  const deg=diff*180/Math.PI;
+  const allowedExits={1:[0,60,330,60],2:[0,60],3:[60,180],4:[60,360]};
+  const lane=Math.min(4,rdtEntryLane);
+  const allowed=allowedExits[lane]||[0,360];
+  // Simplified: check if turned >270° from lane 2 (not allowed)
+  if(lane===2&&deg>100&&!coolOf('rdtex')){
+    addViol(`Wrong exit from Lane ${lane} -- Lane 2 is straight only!`,C.PENALTIES.WRONG_LANE_EXIT,'🔄');
+    setCool('rdtex',5);
+  }
+  rdtEntryLane=-1;
+}
+
+// -- PEDESTRIAN CROSSING LOGIC ---------------------------------
+let pedWarnActive=false;
+function checkPedestrianZones(dt){
+  if(!playerCar)return;
+  const pos=playerCar.position;
+  const spd=Math.abs(ph.speed);
+  let anyPedOnZebra=false;
+
+  zebras.forEach((z,zi)=>{
+    const inDetect=z.axis==='ew'
+      ?Math.abs(pos.z-z.cz)<8&&Math.abs(pos.x-z.cx)<z.w/2+3
+      :Math.abs(pos.x-z.cx)<8&&Math.abs(pos.z-z.cz)<z.d/2+3;
+    if(!inDetect)return;
+
+    // Find peds on/near this zebra
+    const pedsOnZebra=peds.filter(p=>{
+      const px=p.m.position.x, pz=p.m.position.z;
+      return z.axis==='ew'
+        ?Math.abs(pz-z.cz)<4&&Math.abs(px-z.cx)<z.w/2+2
+        :Math.abs(px-z.cx)<4&&Math.abs(pz-z.cz)<z.d/2+2;
+    });
+
+    if(pedsOnZebra.length>0){
+      anyPedOnZebra=true;
+      // Car must slow down within 3m
+      const carDist=z.axis==='ew'?Math.abs(pos.z-z.cz):Math.abs(pos.x-z.cx);
+
+      if(carDist<C.PED_3M*3){
+        // Must decelerate approaching
+        if(spd>C.SPD_MIN*1.2&&!coolOf(`ped_slow_${zi}`)){
+          logEvt('+ Approaching zebra -- reduce speed',false);setCool(`ped_slow_${zi}`,4);
+        }
+      }
+      // Encroachment -- car on crossing while ped is on it
+      const onZebra=z.axis==='ew'
+        ?Math.abs(pos.z-z.cz)<3&&Math.abs(pos.x-z.cx)<z.w/2
+        :Math.abs(pos.x-z.cx)<3&&Math.abs(pos.z-z.cz)<z.d/2;
+      if(onZebra&&!coolOf(`ped_encr_${zi}`)){
+        addViol('Encroached on crossing while pedestrian present!',C.PENALTIES.PED_ENCROACH,'🚶');
+        setCool(`ped_encr_${zi}`,5);
+      }
+      // Positive: stopped for ped
+      if(spd<.2&&carDist<8&&!coolOf(`ped_ok_${zi}`)){
+        logEvt('✓ Stopped for pedestrian at zebra crossing',true);setCool(`ped_ok_${zi}`,8);
+        score=Math.min(100,score+1);updTopBar();
+      }
+    } else {
+      // No ped -- but check overtaking at zebra
+      // If another AI car is stopped near this zebra, don't overtake
+      const nearStoppedAI=aiVehicles.some(v=>{
+        const ad=v.m.position.distanceTo(new THREE.Vector3(z.cx,0,z.cz));
+        return ad<12&&v.spd*v.rt.spd<0.5; // stopped AI
+      });
+      if(nearStoppedAI&&spd>2&&!coolOf(`ped_ov_${zi}`)){
+        addViol('Overtaking at pedestrian crossing!',C.PENALTIES.PED_OVERTAKE,'⛔');setCool(`ped_ov_${zi}`,5);
+      }
+    }
+  });
+
+  // Ped warning display
+  if(anyPedOnZebra!==pedWarnActive){
+    pedWarnActive=anyPedOnZebra;
+    document.getElementById('ped-warn').style.display=anyPedOnZebra?'block':'none';
+  }
+}
+
+// -- SIGN HUD PILLS --------------------------------------------
+const pills={
+  'sp-tl': document.getElementById('sp-tl'),
+  'sp-ped': document.getElementById('sp-ped'),
+  'sp-zone': document.getElementById('sp-zone'),
+  'sp-lane': document.getElementById('sp-lane'),
+};
+function updSignHUD(){
+  if(!playerCar)return;
+  const pos=playerCar.position;
+  // Traffic light
+  let nearest=null,nd=Infinity;
+  trafficLights.forEach(tl=>{const d=pos.distanceTo(tl.pos);if(d<15&&d<nd){nd=d;nearest=tl;}});
+  if(nearest){
+    const pill=pills['sp-tl'];
+    pill.classList.add('show');
+    const col=nearest.state==='green'?'ok-pill':nearest.state==='red'?'danger-pill':'warn-pill';
+    pill.className=`sign-pill show ${col}`;
+    document.getElementById('sp-tl-t').textContent=nearest.state.toUpperCase()+' -- '+
+      (nearest.state==='red'?'STOP':nearest.state==='green'?'PROCEED':nearest.state==='ra'?'PREPARE':'STOP SAFELY');
+  } else pills['sp-tl'].classList.remove('show');
+  // Zone
+  const zPill=pills['sp-zone'];
+  const zt=inRoundabout()?'ROUNDABOUT 20':onMinorRoad()?'MINOR 30':'MAJOR 50';
+  document.getElementById('sp-zone-t').textContent=zt+' km/h';
+  zPill.className='sign-pill show'+(inRoundabout()?'':onMinorRoad()?' warn-pill':' ok-pill');
+  // Ped
+  if(pedWarnActive)pills['sp-ped'].className='sign-pill show danger-pill';
+  else pills['sp-ped'].classList.remove('show');
+  // Lane
+  const ld=detectLane();
+  if(ld.lane>0){
+    const lPill=pills['sp-lane'];
+    const opts=LANE_EXITS[ld.roadType]?.[ld.lane];
+    document.getElementById('sp-lane-t').textContent=`L${ld.lane}: `+(opts?opts.join(', '):'-');
+    lPill.className='sign-pill show ok-pill';
+  } else pills['sp-lane'].classList.remove('show');
+}
+
+// -- VIOLATION / LOG HELPERS -----------------------------------
+function addViol(msg,pen,icon='⚠️'){
+  totalV++; score=Math.max(0,score-pen);
+  sessionFb.push({msg,pass:false});
+  updTopBar(); logEvt(`${icon} ${msg}`,false);
+  flashViol(); setAI(getAIResponse(msg));
+}
+function logEvt(msg,pass){
+  const lst=document.getElementById('log-list');
+  const t=`${Math.floor(sessTime/60)}:${String(Math.floor(sessTime%60)).padStart(2,'0')}`;
+  const d=document.createElement('div');
+  d.className=`le${pass?' lok':''}`;
+  d.innerHTML=`<span class="lt2">${t}</span><span class="lm">${msg}</span>`;
+  lst.insertBefore(d,lst.firstChild);
+  if(lst.children.length>14)lst.lastChild.remove();
+}
+function flashViol(){
+  const el=document.getElementById('vf');
+  el.classList.add('on'); setTimeout(()=>el.classList.remove('on'),480);
+}
+function updTopBar(){
+  document.getElementById('ts-score').textContent=score;
+  document.getElementById('ts-v').textContent=totalV;
+  document.getElementById('ts-t').textContent=`${Math.floor(sessTime/60)}:${String(Math.floor(sessTime%60)).padStart(2,'0')}`;
+  document.getElementById('ts-spd').textContent=(Math.abs(ph.speed)*3.6).toFixed(0);
+}
+
+// -- AI INSTRUCTOR ---------------------------------------------
+const AI_DB={
+  'Red light':'Traffic light is RED -- come to a full stop behind the stop line.',
+  'Amber light':'Amber means stop safely -- unless you have already crossed the line.',
+  'Red+Amber':'Red and Amber together -- remain stopped, prepare your gear and mirrors.',
+  'Speed':'You are over the speed limit. Ease off and stay within the posted zone.',
+  'Wrong way':'One-way road -- all vehicles travel in one direction only. Turn around safely.',
+  'yellow centre':'Yellow centre line is a solid barrier. Never cross it on a two-way road.',
+  'roundabout':'Select your lane before entering the roundabout. No lane changes inside.',
+  'STOP sign':'Stop sign: vehicle must reach complete stop (0 km/h) for at least 3 seconds.',
+  'yield':'Yield sign: reduce speed, be ready to stop. Give way to traffic on the major road.',
+  'parking':'Angle: enter forward (D), exit reverse (R). Parallel: reverse in (R), exit forward (D).',
+  'indicator':'Always signal before turning. Cancel signal after completing the maneuver.',
+  'Collision':'Maintain Golden Rule distance -- see the rear wheels or number plate ahead.',
+  'Lane change':'One lane at a time. Signal, check mirrors, blind spot, then move.',
+  'crossing':'Approaching zebra crossing -- pedestrians have right of way at all times.',
+  'Encroach':'Never drive onto a crossing while a pedestrian is on it.',
+  'Horn':'Never hoot at pedestrians. This is intimidation and is a violation.',
+  'No U-Turn':'U-turn is prohibited in this zone. Find an authorised turning point.',
+  'No Entry':'Do not enter a No Entry zone. Reverse safely and use the correct route.',
+  'U-turn':'U-turn not allowed here. Only Lane 4 of major road or Lane 3 of minor road permit U-turns.',
+  'Wrong exit':'Check your entry lane before the roundabout. Each lane has specific permitted exits.',
+};
+const HINTS=[
+  'Always keep left on every road -- it is the primary rule of the MTB.',
+  'Major road: 4 lanes. Lane 1 = left/straight. Lane 4 = right/180°/270°/360°.',
+  'Minor road: 3 lanes. Lane 3 allows straight, right turn, or U-turn.',
+  'Roundabout: clockwise only, yield on entry, no stops, no lane changes.',
+  'Pedestrian on zebra? Stop and wait until they have fully crossed.',
+  'Stop sign = complete halt for 3 full seconds minimum, behind the stop line.',
+  'Yellow centre line on minor road = solid wall. Crossing it is a critical fail.',
+  'Angle parking: FORWARD in, REVERSE out. Parallel: REVERSE in, FORWARD out.',
+  'Signal at least 30 metres before turning, changing lane, or parking.',
+  'Golden Rule: always see the rear wheels of the vehicle ahead.',
+  'Use shortest correct route first. Longest route if needed. Parking only as last resort.',
+  'Traffic light Red+Amber = prepare only. Do not move until Green shows.',
+];
+function getAIResponse(msg){
+  for(const[k,v]of Object.entries(AI_DB))if(msg.includes(k))return v;
+  return HINTS[Math.floor(Math.random()*HINTS.length)];
+}
+function setAI(msg){document.getElementById('ai-msg').textContent=msg;}
+let hintTimer=0;
+function tickHints(dt){
+  hintTimer+=dt;
+  if(hintTimer>10){hintTimer=0;if(gameRunning)setAI(HINTS[Math.floor(Math.random()*HINTS.length)]);}
+}
+
+// -- CAMERA ---------------------------------------------------
+let camMode=0;
+[['c-fol',0],['c-top',1],['c-hd',2]].forEach(([id,m])=>{
+  document.getElementById(id).addEventListener('click',()=>{
+    camMode=m;
+    ['c-fol','c-top','c-hd'].forEach((i,j)=>document.getElementById(i).classList.toggle('active',j===m));
+  });
+});
+function cycleCam(){camMode=(camMode+1)%3;['c-fol','c-top','c-hd'].forEach((i,j)=>document.getElementById(i).classList.toggle('active',j===camMode));}
+function updateCam(dt){
+  if(!playerCar)return;
+  const pos=playerCar.position,h=ph.heading;
+  if(camMode===0){
+    // Behind car: opposite of forward direction
+    const bx=-Math.sin(h)*12, bz=-Math.cos(h)*12;
+    cam.position.lerp(new THREE.Vector3(pos.x+bx,pos.y+6,pos.z+bz),.07);
+    cam.lookAt(pos.x+Math.sin(h)*5,pos.y+1,pos.z+Math.cos(h)*5);
+  } else if(camMode===1){
+    cam.position.lerp(new THREE.Vector3(pos.x,48,pos.z),.05);
+    cam.lookAt(pos.x,0,pos.z);
+  } else {
+    // Hood cam: just in front of car
+    const fx=Math.sin(h)*2.5, fz=Math.cos(h)*2.5;
+    cam.position.copy(new THREE.Vector3(pos.x+fx,pos.y+1.6,pos.z+fz));
+    cam.lookAt(pos.x+Math.sin(h)*25,pos.y+1.5,pos.z+Math.cos(h)*25);
+  }
+}
+
+// -- SPEEDOMETER ----------------------------------------------
+function drawSpd(spd,lim){
+  const c=document.getElementById('sc'),ctx=c.getContext('2d');
+  const W=c.width,H=c.height,cx=W/2,cy=H/2,R=56;
+  ctx.clearRect(0,0,W,H);
+  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fillStyle='#050c18';ctx.fill();
+  ctx.strokeStyle='rgba(245,196,0,.28)';ctx.lineWidth=1.5;ctx.stroke();
+  const sa=Math.PI*.75,ea=Math.PI*2.25,maxS=lim*1.6;
+  const na=sa+Math.min(spd/maxS,1)*(ea-sa);
+  ctx.beginPath();ctx.arc(cx,cy,R-7,sa,na);
+  ctx.strokeStyle=spd>lim?'#e8321a':spd>lim*.85?'#f5c400':'#1fc86b';
+  ctx.lineWidth=7;ctx.lineCap='round';ctx.stroke();
+  for(let i=0;i<=10;i++){
+    const a=sa+(i/10)*(ea-sa),inn=i%5===0?R-18:R-12;
+    ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*inn,cy+Math.sin(a)*inn);
+    ctx.lineTo(cx+Math.cos(a)*(R-7),cy+Math.sin(a)*(R-7));
+    ctx.strokeStyle=i%5===0?'rgba(245,196,0,.8)':'rgba(200,200,200,.3)';ctx.lineWidth=i%5===0?2:1;ctx.stroke();
+  }
+  ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(na)*(R-14),cy+Math.sin(na)*(R-14));
+  ctx.strokeStyle='#fff';ctx.lineWidth=1.8;ctx.lineCap='round';ctx.stroke();
+  ctx.beginPath();ctx.arc(cx,cy,4,0,Math.PI*2);ctx.fillStyle='#f5c400';ctx.fill();
+  ctx.fillStyle='#fff';ctx.textAlign='center';
+  ctx.font='bold 19px Oswald,monospace';ctx.fillText(Math.round(spd),cx,cy+7);
+  ctx.font='8px Source Code Pro,monospace';ctx.fillStyle='#5a7080';ctx.fillText('KM/H',cx,cy+18);
+  ctx.fillStyle=spd>lim?'#e8321a':'#4a7090';ctx.fillText('LIM '+lim,cx,cy+28);
+}
+
+// -- MINIMAP ---------------------------------------------------
+function drawOverlay(){
+  const ctx=oc.getContext('2d'),W=oc.width,H=oc.height;
+  ctx.clearRect(0,0,W,H);
+  const MS=132,mx=W-MS-10,my=10,sc=MS/320;
+  const ox=mx+MS/2,oy=my+MS/2;
+  function wp(wx,wz){return[ox+wx*sc,oy+wz*sc];}
+  ctx.fillStyle='rgba(5,10,20,.88)';ctx.fillRect(mx,my,MS,MS);
+  ctx.strokeStyle='rgba(245,196,0,.45)';ctx.lineWidth=1;ctx.strokeRect(mx,my,MS,MS);
+  // Roads
+  ctx.fillStyle='#1e2228';
+  const mhw=C.MAJ_W/2*sc;
+  ctx.fillRect(mx,oy+(C.MAJ_UPPER_Z-mhw),MS,C.MAJ_W*sc);
+  ctx.fillRect(mx,oy+(C.MAJ_LOWER_Z-mhw),MS,C.MAJ_W*sc);
+  ctx.fillRect(ox+(C.MAJ_LEFT_X-mhw),my,C.MAJ_W*sc,MS);
+  // Minor
+  ctx.fillStyle='#252a32';
+  ctx.fillRect(mx,oy+(C.MIN_H_Z-C.MIN_W/2*sc),MS,C.MIN_W*sc);
+  // Roundabout
+  ctx.beginPath();ctx.arc(...wp(C.RDT_X,C.RDT_Z),C.RDT_OUTER*sc,0,Math.PI*2);ctx.fillStyle='#1e2228';ctx.fill();
+  ctx.beginPath();ctx.arc(...wp(C.RDT_X,C.RDT_Z),C.RDT_INNER*sc,0,Math.PI*2);ctx.fillStyle='#1a4010';ctx.fill();
+  // Dest
+  if(destMarker){const[dx,dy]=wp(destMarker.position.x,destMarker.position.z);ctx.beginPath();ctx.arc(dx,dy,4,0,Math.PI*2);ctx.fillStyle='#00ff88';ctx.fill();}
+  // AI
+  aiVehicles.forEach(v=>{const[ax,ay]=wp(v.m.position.x,v.m.position.z);ctx.beginPath();ctx.arc(ax,ay,2,0,Math.PI*2);ctx.fillStyle='#ff6644';ctx.fill();});
+  // Peds
+  peds.forEach(p=>{const[px2,py2]=wp(p.m.position.x,p.m.position.z);ctx.beginPath();ctx.arc(px2,py2,2,0,Math.PI*2);ctx.fillStyle=p.onCrossing?'#ff4444':'#ffaaaa';ctx.fill();});
+  // Player
+  if(playerCar){
+    const[px2,py2]=wp(playerCar.position.x,playerCar.position.z);
+    ctx.beginPath();ctx.arc(px2,py2,4.5,0,Math.PI*2);ctx.fillStyle='#f5c400';ctx.fill();
+    const ha=ph.heading+Math.PI; // point arrow in forward direction
+    ctx.beginPath();ctx.moveTo(px2+Math.sin(ha)*10,py2+Math.cos(ha)*10);
+    ctx.lineTo(px2+Math.sin(ha+2.5)*5,py2+Math.cos(ha+2.5)*5);
+    ctx.lineTo(px2+Math.sin(ha-2.5)*5,py2+Math.cos(ha-2.5)*5);
+    ctx.closePath();ctx.fillStyle='#f5c400';ctx.fill();
+  }
+  ctx.fillStyle='rgba(245,196,0,.5)';ctx.font='7px monospace';ctx.fillText('MINIMAP',mx+4,my+9);
+}
+
+// -- SCENARIOS -------------------------------------------------
+const SCENARIOS=[
+  {name:'Basic City Driving',rule:'Rule 1: Shortest Route',diff:'e',label:'BASIC',
+   speedLimit:50,ai:4,peds:3,
+   destPos:new THREE.Vector3(50,0,55),startPos:new THREE.Vector3(-80,.38,C.MAJ_UPPER_Z-5.25),startH:Math.PI/2,
+   desc:'Follow major road east, use correct lane discipline, obey all traffic signals.',
+   hints:['Keep left at all times.','Stop fully at red lights.','Signal before turning.','Use the shortest correct route.']},
+  {name:'Roundabout Navigation',rule:'Rule 1: Shortest + Roundabout',diff:'m',label:'INTERMEDIATE',
+   speedLimit:50,ai:8,peds:2,
+   destPos:new THREE.Vector3(-75,.0,C.MAJ_UPPER_Z),startPos:new THREE.Vector3(100,.38,C.MAJ_UPPER_Z-5.25),startH:-Math.PI/2,
+   desc:'Navigate through the roundabout correctly. Enter from correct lane, yield, exit correctly.',
+   hints:['Yield to vehicles already in roundabout.','Do not change lanes inside.','Lane 1 outer: straight/left. Lane 2: straight only.','Signal before exiting the roundabout.']},
+  {name:'Lane Exit Mapping',rule:'Lane Discipline + Exit Rules',diff:'m',label:'INTERMEDIATE',
+   speedLimit:50,ai:5,peds:2,
+   destPos:new THREE.Vector3(C.RDT_X,.0,C.RDT_Z-30),startPos:new THREE.Vector3(-100,.38,C.MAJ_UPPER_Z-1.75),startH:Math.PI/2,
+   desc:'Choose the correct lane for each exit. Lane 4 enables 180°/270°/360° turns. Lane 2 is straight only.',
+   hints:['Lane 4 only: opposite side (180°), 270°, full circle.','Lane 2 is STRAIGHT ONLY -- no turning from it.','On minor road: Lane 3 allows U-turn.','Shift one lane at a time when needed.']},
+  {name:'Stop & Yield Signs',rule:'Priority Sign Compliance',diff:'m',label:'INTERMEDIATE',
+   speedLimit:30,ai:4,peds:4,
+   destPos:new THREE.Vector3(C.MIN_V_X,.0,-40),startPos:new THREE.Vector3(-80,.38,C.MIN_H_Z+1),startH:Math.PI/2,
+   desc:'Navigate minor roads. Full 3-second stop at STOP signs. Yield correctly at GIVE WAY signs.',
+   hints:['STOP sign: complete stop for 3 full seconds minimum.','YIELD: slow down, be ready to stop for major road traffic.','Stop LINE is broad white transverse -- stop BEHIND it.','Broken transverse lines = Give Way zone.']},
+  {name:'Pedestrian Crossings',rule:'Zebra Crossing Rules',diff:'m',label:'INTERMEDIATE',
+   speedLimit:30,ai:4,peds:6,
+   destPos:new THREE.Vector3(-60,.0,-70),startPos:new THREE.Vector3(C.MIN_V_X,.38,40),startH:Math.PI,
+   desc:'Zebra crossings: detect pedestrians in 3m zone, stop and wait until fully clear.',
+   hints:['3-metre rule: decelerate when pedestrian enters zone.','Stop behind stop line -- not on stripes.','Wait until pedestrian fully clears crossing.','Never overtake a vehicle stopped at a crossing.','No horn near a pedestrian crossing.']},
+  {name:'Parking Maneuvers',rule:'Rule 3: Parking Last Resort',diff:'m',label:'INTERMEDIATE',
+   speedLimit:30,ai:3,peds:2,
+   destPos:new THREE.Vector3(-88,.0,52),startPos:new THREE.Vector3(0,.38,C.MIN_H_Z+1),startH:Math.PI/2,
+   desc:'Reach angle parking via minor road. Enter forward (D), exit reverse (R). Yellow kerbs are no-stop.',
+   hints:['Angle parking: D gear forward in, R gear reverse out.','Parallel: R gear reverse in, D gear forward out.','Never stop on yellow kerbs.','Park only as last resort -- use direct route first.']},
+  {name:'Full MTB Assessment',rule:'All 3 Rules -- Complete Test',diff:'h',label:'EXPERT',
+   speedLimit:50,ai:10,peds:8,
+   destPos:new THREE.Vector3(44,.0,60),startPos:new THREE.Vector3(-80,.38,C.MAJ_UPPER_Z-5.25),startH:Math.PI/2,
+   desc:'Complete NTSA Model Town Board assessment. All rules apply. No reminders -- full independent evaluation.',
+   hints:['All MTB rules apply simultaneously.','Shortest route first, longest second, parking last.','Every sign, signal, lane, and maneuver is scored.','Good luck -- this is the full NTSA assessment.']},
+];
+
+// -- SCENARIO UI -----------------------------------------------
+const scList=document.getElementById('sc-list');
+let selSc=0;
+SCENARIOS.forEach((sc,i)=>{
+  const el=document.createElement('div');
+  el.className=`sc-item${i===0?' active':''}`;
+  el.innerHTML=`<div class="scn">${sc.name}</div><div class="scr">${sc.rule}</div><span class="scd d${sc.diff}">${sc.label}</span>`;
+  el.addEventListener('click',()=>{
+    document.querySelectorAll('.sc-item').forEach(e=>e.classList.remove('active'));
+    el.classList.add('active'); selSc=i; updRoutePanel(sc);
+  });
+  scList.appendChild(el);
+});
+function updRoutePanel(sc){
+  document.getElementById('ri-s').textContent=`Start: ${sc.startPos.x.toFixed(0)}, ${sc.startPos.z.toFixed(0)}`;
+  document.getElementById('ri-d').textContent=`Dest: ${sc.destPos.x.toFixed(0)}, ${sc.destPos.z.toFixed(0)}`;
+  document.getElementById('ri-r').textContent=`Rule: ${sc.rule}`;
+  document.getElementById('sc-badge').textContent=sc.name.toUpperCase();
+}
+updRoutePanel(SCENARIOS[0]);
+
+// Gear UI
+document.querySelectorAll('.gi').forEach(el=>el.addEventListener('click',()=>setGear(el.dataset.g)));
+// Control buttons
+function hookBtn(id,code){
+  const el=document.getElementById(id);if(!el)return;
+  el.addEventListener('pointerdown',()=>{keys[code]=true;el.classList.add('pressed');});
+  ['pointerup','pointerleave','pointercancel'].forEach(ev=>el.addEventListener(ev,()=>{keys[code]=false;el.classList.remove('pressed');}));
+}
+hookBtn('ba','ArrowUp');hookBtn('bd','ArrowDown');hookBtn('bl','ArrowLeft');hookBtn('br','ArrowRight');hookBtn('bb','Space');
+document.getElementById('bsl').addEventListener('click',()=>{sigL=!sigL;sigR=false;updSigUI();});
+document.getElementById('bsr').addEventListener('click',()=>{sigR=!sigR;sigL=false;updSigUI();});
+document.getElementById('bhn').addEventListener('click',()=>hornTrigger());
+document.getElementById('bc2').addEventListener('click',()=>cycleCam());
+
+// -- GAME STATE -------------------------------------------------
+let gameRunning=false,activeSc=null;
+document.getElementById('btn-start').addEventListener('click',startSc);
+document.getElementById('btn-reset').addEventListener('click',()=>{if(activeSc)startSc();});
+document.getElementById('btn-end').addEventListener('click',()=>endSession(false));
+document.getElementById('res-retry').addEventListener('click',()=>{document.getElementById('res-mod').style.display='none';startSc();});
+document.getElementById('res-menu').addEventListener('click',()=>document.getElementById('res-mod').style.display='none');
+
+function startSc(){
+  const sc=SCENARIOS[selSc]; activeSc=sc;
+  score=100;totalV=0;sessTime=0;distTrav=0;sessionFb=[];
+  Object.keys(cds).forEach(k=>delete cds[k]);
+  stopSigns.forEach(s=>{s.stopHeld=0;s.passed=false;});
+  sigL=false;sigR=false;updSigUI();
+  ph.speed=0;ph.heading=sc.startH;ph.steer=0;ph.gear='N';setGear('N');
+  prevRdtLane=-1;rdtEntryLane=-1;pedWarnActive=false;laneMapShown='';
+
+  buildWorld(sc);
+  playerCar=buildPlayerCar();
+  playerCar.position.copy(sc.startPos);
+  playerCar.rotation.y=sc.startH;
+  destMarker.position.copy(sc.destPos);destMarker.position.y=0;
+
+  spawnAI(sc.ai); spawnPeds(sc.peds);
+  document.getElementById('log-list').innerHTML='';
+  updTopBar(); updRoutePanel(sc);
+  setAI(sc.hints[0]);
+  gameRunning=true;
+  logEvt('✓ Session started -- '+sc.name,true);
+}
+
+function endSession(reached){
+  if(!gameRunning)return;
+  gameRunning=false;
+  if(reached){logEvt('✓ Destination reached!',true);sessionFb.push({msg:'Destination reached',pass:true});}
+  if(totalV===0)sessionFb.push({msg:'Zero violations -- perfect drive!',pass:true});
+  const grade=score>=90?'A':score>=75?'B':score>=60?'C':score>=50?'D':'F';
+  document.getElementById('res-t').textContent=reached&&score>=60?'✓ PASSED':'SESSION ENDED';
+  document.getElementById('res-t').style.color=reached&&score>=60?'#1fc86b':'#e8321a';
+  document.getElementById('res-sub').textContent=(activeSc?.name||'')+'--Kenya MTB Assessment';
+  document.getElementById('res-s').textContent=score;
+  document.getElementById('res-v').textContent=totalV;
+  document.getElementById('res-g').textContent=grade;
+  document.getElementById('res-g').style.color=score>=75?'#1fc86b':score>=60?'#f5c400':'#e8321a';
+  document.getElementById('res-fb').innerHTML=sessionFb.slice(-8).map(f=>`<div class="mo-fi ${f.pass?'p':'f'}">${f.pass?'✓':'✗'} ${f.msg}</div>`).join('');
+  document.getElementById('res-mod').style.display='flex';
+}
+
+// -- DESTINATION PULSE -----------------------------------------
+let destT=0;
+function tickDest(dt){
+  if(!destMarker)return;
+  destT+=dt;
+  destMarker.children.forEach(c=>{if(c.material)c.material.color.setHSL(.38,1,.3+.22*Math.sin(destT*3));});
+  destMarker.position.y=.1*Math.sin(destT*2);
+}
+
+// -- MAIN LOOP -------------------------------------------------
+let lastT=0;
+function animate(now){
+  requestAnimationFrame(animate);
+  const dt=Math.min((now-lastT)/1000,.05);lastT=now;
+  if(gameRunning&&activeSc){
+    sessTime+=dt;
+    physicsStep(dt,activeSc);
+    updateAI(dt);
+    updatePeds(dt);
+    updateTLights(dt);
+    checkViolations(dt,activeSc);
+    tickDest(dt);
+    tickHints(dt);
+    updSignHUD();
+    const spd=Math.abs(ph.speed)*3.6;
+    drawSpd(spd,activeSc.speedLimit);
+    updTopBar();
+    updLaneMap(detectLane().roadType,detectLane().lane);
+  }
+  updateCam(dt);
+  drawOverlay();
+  renderer.render(scene,cam);
+}
+// Static preview
+buildWorld(SCENARIOS[0]);
+cam.position.set(-20,60,20);cam.lookAt(0,0,0);
+requestAnimationFrame(ts=>{lastT=ts;animate(ts);});
+})();
+</script>
+</body>
+</html>
