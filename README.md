@@ -16,6 +16,7 @@
    - [Pedestrian Simulation](#pedestrian-simulation)
    - [Parking System](#parking-system)
    - [Traffic Light System (4-Phase)](#traffic-light-system-4-phase)
+   - [Distance-Based Cost System](#distance-based-cost-system)
    - [Lane Detection & Exit Mapping](#lane-detection--exit-mapping)
    - [Player Physics](#player-physics)
    - [Camera System](#camera-system)
@@ -82,17 +83,14 @@ The world is a fixed 300 × 300 unit model town. All coordinates below are world
 |--------------------|------------|---------------------|-------------|
 | EW Upper           | Eastbound ONE-WAY  | Z = −50 | 50 km/h     |
 | EW Lower           | Westbound ONE-WAY  | Z = −36 | 50 km/h     |
-| NS Left            | Southbound ONE-WAY | X = −70 | 50 km/h     |
-| NS Right           | Northbound ONE-WAY | X = −56 | 50 km/h     |
 
-A **raised concrete median with green verge** and yellow kerb lines separates the EW dual carriageway at Z = −43. U-turn gaps exist at X = −100, −40, −10.
+A **raised concrete median with green verge** and yellow kerb lines separates the EW dual carriageway at Z = −43. A single **crossing gap** exists at X = −30 (for V1), featuring rounded island ends.
 
 ### Minor Roads (Two-Way, 3 lanes × 3.2 m = 9.6 m wide)
 
-| Road Segment       | Direction  | Centre Z/X          | Speed Limit |
-|--------------------|------------|---------------------|-------------|
-| Minor H (EW)       | Two-way    | Z = +30             | 30 km/h     |
-| Minor V (NS)       | Two-way    | X = +40             | 30 km/h     |
+| Minor H North (EW) | Two-way    | Z = −105            | 30 km/h     |
+| Minor H South (EW) | Two-way    | Z = +40             | 30 km/h     |
+| Minor V1 (NS)      | Two-way    | X = −30             | 30 km/h     |
 
 Both minor roads have a **solid yellow centre line** (no crossing). Broken white lines mark overtaking zones at specified positions.
 
@@ -105,7 +103,7 @@ Both minor roads have a **solid yellow centre line** (no crossing). Broken white
 | Outer radius    | 24 m                          |
 | Lanes           | 4 (clockwise, 3 m each)       |
 | Speed limit     | 20 km/h                       |
-| Arms            | W (28 m wide), E, N, S        |
+| Arms            | W (28 m Major), E (14 m Major), N (9.6 m Minor), S (9.6 m Minor) |
 
 The S arm extends 50 units south to connect to the Minor H road. All arms have stop lines, yield signs, zebra crossings, and traffic lights at junction corners.
 
@@ -114,7 +112,7 @@ The S arm extends 50 units south to connect to the Minor H road. All arms have s
 - **Traffic lights** at all major intersections and all 4 roundabout arm mouths (16+ signal sets)
 - **Stop signs** — minor H road entering NS major; minor V road entering minor H
 - **Yield signs** — all roundabout arm mouths; parking aisle exits
-- **Zebra crossings** — at NS junction flanks (×2), all 4 roundabout arms (×4), minor H (×1), minor V (×1)
+- **Zebra crossings** — EW road segments (×4), all 4 roundabout arms (×4), minor H (×1), minor V (×1)
 - **Keep Left mandatory signs** on EW road verges (×4)
 - **No U-Turn signs** on upper EW verge (×1)
 - **Warning diamond signs** on roundabout approach verges (×8)
@@ -160,7 +158,7 @@ The `checkViolations()` function is called every animation frame and evaluates 2
 | 2a| **Amber light**                   | Speed > 1 m/s, TL amber, > 5 m before stop line                | 10          |
 | 2b| **Red+Amber**                     | Speed > 1 m/s when TL is in red+amber prepare phase            | 10          |
 | 3 | **Stop sign — 3-second stop**     | Failed to hold 0 km/h for 3 continuous seconds at stop sign    | 18          |
-| 4 | **Yield / Give Way**              | Entered roundabout approach > 2 m/s while ring traffic present | 12          |
+| 4 | **Yield / Give Way**              | Entered roundabout or U-turn gap > 1.5 m/s while higher priority traffic present | 12          |
 | 5 | **Wrong way (one-way road)**      | Heading against traffic direction on EW upper or lower         | 25          |
 | 6 | **Yellow centre line crossing**   | Player position inside yellow centre line AABB                  | 25          |
 | 7 | **Yellow kerb — no stopping**     | Stopped (< 0.2 m/s) inside yellow kerb AABB                    | 10          |
@@ -242,6 +240,15 @@ RED (5 s) → RED+AMBER (1.5 s) → GREEN (5 s) → AMBER (2 s) → [repeat]
 - All traffic light sets are controlled by a shared timer with a **per-unit offset** (`trafficLights.length × 2.8 s`) so adjacent signals are staggered.
 - The **Traffic Light Phase HUD** (right panel) shows the current phase of the nearest TL set with coloured dots.
 - The **sign strip pill** (`🚦`) above the 3D canvas shows the current TL state for any TL within 15 m.
+
+---
+
+### Distance-Based Cost System
+
+- **Player Balance**: Starts at `500.00 KES`.
+- **Distance Deduction**: Every frame, the game multiplies the distance travelled by `COST_PER_METER` (0.50 KES) and deductions it from the player's balance.
+- **Top-Up**: If balance hits 0, the vehicle is halted and a modal appears to top-up the balance by `500 KES`, enforcing economic limitations.
+- **Top Bar UI**: The current balance (`KES BAL`) is shown dynamically in the HUD, turning amber at <50 KES and red at <10 KES.
 
 ---
 
@@ -430,20 +437,20 @@ The following features are partially implemented or not yet started:
 - [ ] **Pedestrian traffic light phase** — pedestrians currently cross on any green TL, but a dedicated pedestrian phase (green man / red man) is not implemented; the red-light crossing rule is enforced as a rule but ped movement is green-light-gated rather than ped-phase-gated.
 - [ ] **School zone** — `C.SPD_SCHOOL = 20/3.6` constant defined but no physical school zone or signs placed in the world.
 - [ ] **No-entry zones** — `noEntryZones` array and violation check (#15) are implemented but no zones are actually placed in any scenario (`buildNoEntrySign()` exists but is commented out).
-- [ ] **Central reserve U-turn gaps (visual)** — logic gates (`yieldSigns` with `isUTurnGap:true`) exist at X = −100, −40, −10 but no visible U-turn signs or painted road markings are rendered at those positions.
-- [ ] **Solid white centre line on major road arms** — outer solid edge lines exist; inner lane dividers use broken white (correct), but some arm configurations lack explicit no-lane-change solid lines between carriageways.
+- [x] **V1 junction crossing gap (visual)** — Gaps at X = −30 for V1 Junction with rounded island ends.
+- [x] **Solid white centre line on major road arms** — Correct lane dividers and solid edge lines implemented for all 4 roundabout arms.
 - [ ] **Additional road environment** — no petrol station, bus stop, school, hospital, or market zone is defined, though NTSA MTB may reference these as waypoints.
 
 ### Violations & Scoring
 - [ ] **No-overtaking zone enforcement** — broken vs solid overtaking segments on minor roads are visually built, but no active violation checks distinguish overtaking vs non-overtaking sections.
 - [ ] **Solid line crossing on minor two-way road** — the `SOLID_LINE_CROSS` penalty constant exists; check #8 only covers the major road outer edge. Crossing the yellow centre of minor roads fires `YLW_LINE` (rule #6) but not `SOLID_LINE_CROSS`.
-- [ ] **U-turn gap yield** — yield signs at central reserve gaps (`isUTurnGap:true`) are pushed to `yieldSigns[]`, but the `checkViolations` yield check only processes `isRoundabout:true` signs and ignores U-turn gap signs.
+- [ ] **Junction crossing yield** — The `checkViolations` function currently enforces "Yield to Right" at roundabouts; junction-specific yield logic for highway crossings is pending.
 - [ ] **Roundabout signal compliance** — the AI instructor mentions "Signal RIGHT entering roundabout, signal LEFT before exit" but no automated signal check enforces this in `checkViolations`.
 - [ ] **Following distance positive feedback** — the Golden Rule distance is checked for violations; there is no positive-feedback score event for maintaining adequate following distance.
 
 ### AI & Simulation
-- [ ] **NS road AI traffic** — `AI_CHAINS` only define EW and roundabout routes; no AI vehicles travel the NS major roads (left southbound / right northbound).
-- [ ] **Minor V road AI** — only Minor H road (Z = 30) has an AI chain. Minor V road (X = 40) has none.
+- [ ] **NS road AI traffic** — `AI_CHAINS` define EW and roundabout routes; basic V1 vertical crossing is implemented, but full-length board-edge NS traffic is still pending.
+- [x] **Minor V road AI** — V1 vertical road (X = −30) now has active AI traffic chains for Northbound and Southbound flow.
 - [ ] **Pedestrian traffic density scaling** — peds are evenly distributed across all zebras; there is no per-zebra density weight or time-of-day variation.
 - [ ] **AI signalling** — AI vehicles have indicator meshes but these are never activated; AI does not signal before turning or entering the roundabout.
 - [ ] **AI horn** — no horn sound or visual for AI vehicles.

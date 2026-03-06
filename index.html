@@ -520,10 +520,11 @@
     }
 
     .cbtn2:active,
-    .cbtn2.pressed {
-      background: rgba(245, 196, 0, .2);
-      border-color: var(--ui-accent);
-      color: var(--ui-accent);
+    .cbtn2.pressed,
+    .cbtn2.active {
+      background: rgba(31, 200, 107, .2);
+      border-color: #1fc86b;
+      color: #1fc86b;
       transform: scale(.92);
     }
 
@@ -743,6 +744,158 @@
       background: rgba(245, 196, 0, .3);
       border-radius: 2px;
     }
+
+    /* MOBILE RESPONSIVE LAYOUT */
+    @media (max-width: 1024px) {
+      #app {
+        grid-template-columns: 180px 1fr 180px;
+      }
+
+      .sc-item,
+      .lane-opts,
+      .ri-lbl {
+        font-size: 0.9rem;
+      }
+    }
+
+    @media (max-width: 768px) {
+      #app {
+        grid-template-areas:
+          "topbar topbar topbar"
+          "canvas canvas canvas"
+          "bottom bottom bottom";
+        grid-template-columns: 1fr;
+        grid-template-rows: 52px 1fr auto;
+      }
+
+      #topbar {
+        grid-area: topbar;
+      }
+
+      #cw {
+        grid-area: canvas;
+      }
+
+      #bp {
+        grid-area: bottom;
+      }
+
+      #lp,
+      #rp {
+        position: fixed;
+        top: 52px;
+        bottom: 0;
+        width: 80vw;
+        max-width: 300px;
+        z-index: 1000;
+        background: rgba(0, 0, 0, 0.95);
+        backdrop-filter: blur(10px);
+        transform: translateX(-100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      #rp {
+        right: 0;
+        transform: translateX(100%);
+      }
+
+      #lp.open {
+        transform: translateX(0);
+      }
+
+      #rp.open {
+        transform: translateX(0);
+      }
+
+      /* Hamburger menu buttons for mobile */
+      .mobile-menu-btn {
+        display: block;
+        background: none;
+        border: none;
+        color: var(--ui-accent);
+        font-size: 24px;
+        cursor: pointer;
+      }
+
+      #score-strip {
+        gap: 12px;
+      }
+
+      .virtual-joystick {
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        width: 120px;
+        height: 120px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        touch-action: none;
+        z-index: 50;
+      }
+
+      .joystick-stick {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 50px;
+        height: 50px;
+        background: rgba(245, 196, 0, 0.6);
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+      }
+
+      /* Mobile touch controls panel */
+      .touch-controls {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        z-index: 50;
+      }
+
+      .mobile-btn {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: rgba(6, 11, 18, 0.8);
+        border: 1px solid var(--ui-accent);
+        color: white;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        user-select: none;
+        touch-action: none;
+      }
+
+      .mobile-btn:active {
+        background: var(--ui-accent);
+        color: #000;
+      }
+
+      /* Hide standard bottom panel controls on mobile */
+      #ctrl-area {
+        display: none;
+      }
+    }
+
+    @media (min-width: 769px) {
+      .mobile-menu-btn {
+        display: none;
+      }
+
+      .virtual-joystick {
+        display: none;
+      }
+
+      .touch-controls {
+        display: none;
+      }
+    }
   </style>
 </head>
 
@@ -775,6 +928,10 @@
         <div class="ts">
           <div class="tsv" id="ts-lane" style="color:#4a90d9">--</div>
           <div class="tsl">LANE</div>
+        </div>
+        <div class="ts" style="border-left:1px solid rgba(245,196,0,.2);padding-left:16px">
+          <div class="tsv" id="ts-bal" style="color:#1fc86b">500</div>
+          <div class="tsl">KES BAL</div>
         </div>
       </div>
     </div>
@@ -820,6 +977,15 @@
         <div class="sign-pill" id="sp-lane">🛣️ <span id="sp-lane-t">LANE 1</span></div>
       </div>
       <div id="ped-warn">⚠️ PEDESTRIAN ON CROSSING -- WAIT TO CLEAR</div>
+
+      <!-- Mobile Controls Overlay -->
+      <div id="v-joystick-container"></div>
+      <div class="touch-controls">
+        <div class="mobile-btn" id="mb-sigl">◀</div>
+        <div class="mobile-btn" id="mb-horn">📢</div>
+        <div class="mobile-btn" id="mb-sigr">▶</div>
+        <div class="mobile-btn" style="grid-column: 2; background:rgba(232, 50, 26, 0.5)" id="mb-brk">🛑</div>
+      </div>
     </div>
 
     <!-- RIGHT PANEL -->
@@ -873,6 +1039,7 @@
             <div class="cbtn2" id="bsr" style="width:58px;font-size:9px;padding:3px">SIG E ▶</div>
             <div class="cbtn2" id="bhn" style="width:58px;font-size:9px;padding:3px">H HORN</div>
             <div class="cbtn2" id="bc2" style="width:58px;font-size:9px;padding:3px">C CAM</div>
+            <div class="cbtn2" id="bau" style="width:58px;font-size:9px;padding:3px">Z AUTO</div>
           </div>
         </div>
       </div>
@@ -915,14 +1082,221 @@
     </div>
   </div>
 
+  <!-- TOP-UP MODAL -->
+  <div class="mbd" id="topup-mod" style="display:none">
+    <div class="mo">
+      <h2 style="color:#e8321a">⛽ TOP UP REQUIRED</h2>
+      <div class="mo-sub">Insufficient balance — vehicle halted</div>
+      <div class="mo-grid" style="grid-template-columns:1fr 1fr">
+        <div class="mo-stat">
+          <div class="mo-sv" id="tu-bal" style="color:#e8321a">0</div>
+          <div class="mo-sl">BALANCE (KES)</div>
+        </div>
+        <div class="mo-stat">
+          <div class="mo-sv" id="tu-rate">0.50</div>
+          <div class="mo-sl">RATE (KES/M)</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:#5a7080;margin:8px 0">Distance travelled: <span id="tu-dist"
+          style="color:#f5c400">0</span> m</div>
+      <div class="mo-btns">
+        <button class="abtn" id="topup-btn" style="width:180px">+ TOP UP 500 KES</button>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
     (function () {
       'use strict';
       // ===========================================================
-      //  KENYA MTB SIMULATOR v2 -- Complete Rules Engine
+      //  KENYA MTB SIMULATOR v3 -- Complete Rules & Audio Engine
       //  All NTSA MTB regulations encoded as hard logic constraints
       // ===========================================================
+
+      // -- AUDIO SYSTEM (Web Audio API) ------------------------------
+      class MTBAudioManager {
+        constructor() {
+          this.context = null;
+          this.masterGain = null;
+          this.nodes = new Map();
+          this.isInitialized = false;
+        }
+
+        async initialize() {
+          if (this.isInitialized) return;
+          try {
+            this.context = new (window.AudioContext || window.webkitAudioContext)();
+            this.masterGain = this.context.createGain();
+            this.masterGain.gain.value = 0.4; // Default volume
+            this.masterGain.connect(this.context.destination);
+
+            this.createEngineSynth();
+            this.createHornSynth();
+
+            this.isInitialized = true;
+            console.log("MTB Audio System initialized");
+          } catch (e) {
+            console.warn("Audio initialization failed:", e);
+          }
+        }
+
+        createEngineSynth() {
+          const osc = this.context.createOscillator();
+          const filter = this.context.createBiquadFilter();
+          const rpmGain = this.context.createGain();
+
+          osc.type = 'sawtooth';
+          osc.frequency.value = 60; // Base idle
+
+          filter.type = 'lowpass';
+          filter.Q.value = 1;
+          filter.frequency.value = 400;
+
+          osc.connect(filter);
+          filter.connect(rpmGain);
+          rpmGain.connect(this.masterGain);
+
+          osc.start();
+          this.nodes.set('engine', { osc, rpmGain, filter });
+        }
+
+        createHornSynth() {
+          const fundamental = this.context.createOscillator();
+          const gain = this.context.createGain();
+
+          fundamental.type = 'square';
+          fundamental.frequency.value = 400; // Horn fundamental
+
+          gain.gain.value = 0; // Silent by default
+
+          fundamental.connect(gain);
+          gain.connect(this.masterGain);
+
+          fundamental.start();
+          this.nodes.set('horn', { gain });
+        }
+
+        updateEngine(speed, throttle, gear) {
+          if (!this.isInitialized) return;
+          const engine = this.nodes.get('engine');
+          if (!engine) return;
+
+          const baseFreq = gear === 'R' ? 60 : (70 + (Math.abs(speed) * 12));
+          const rpmRatio = Math.min(Math.abs(speed) / 15, 1);
+
+          engine.osc.frequency.setTargetAtTime(baseFreq, this.context.currentTime, 0.1);
+
+          const targetGain = 0.05 + (throttle * 0.15) + (rpmRatio * 0.1);
+          engine.rpmGain.gain.setTargetAtTime(targetGain, this.context.currentTime, 0.05);
+          engine.filter.frequency.setTargetAtTime(400 + (rpmRatio * 1500), this.context.currentTime, 0.1);
+        }
+
+        triggerHorn(duration = 0.5) {
+          if (!this.isInitialized) return;
+          const horn = this.nodes.get('horn');
+          if (!horn) return;
+
+          const now = this.context.currentTime;
+          horn.gain.gain.cancelScheduledValues(now);
+          horn.gain.gain.setValueAtTime(0.3, now);
+          horn.gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        }
+      }
+
+      const audioManager = new MTBAudioManager();
+
+      // -- PERSISTENT STORAGE (IndexedDB) ----------------------------
+      const DB_NAME = 'MTBSimulatorDB';
+      const DB_VERSION = 1;
+      const STORES = {
+        SESSIONS: 'sessions',
+        PROGRESS: 'progress',
+        SETTINGS: 'settings',
+        REPLAYS: 'replays'
+      };
+
+      class StorageManager {
+        constructor() {
+          this.db = null;
+        }
+
+        async init() {
+          return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+              this.db = request.result;
+              resolve();
+            };
+
+            request.onupgradeneeded = (event) => {
+              const db = event.target.result;
+
+              if (!db.objectStoreNames.contains(STORES.SESSIONS)) {
+                const sessionStore = db.createObjectStore(STORES.SESSIONS, { keyPath: 'id', autoIncrement: true });
+                sessionStore.createIndex('date', 'timestamp', { unique: false });
+                sessionStore.createIndex('scenario', 'scenarioId', { unique: false });
+                sessionStore.createIndex('grade', 'grade', { unique: false });
+              }
+              if (!db.objectStoreNames.contains(STORES.PROGRESS)) db.createObjectStore(STORES.PROGRESS, { keyPath: 'userId' });
+              if (!db.objectStoreNames.contains(STORES.SETTINGS)) db.createObjectStore(STORES.SETTINGS, { keyPath: 'key' });
+              if (!db.objectStoreNames.contains(STORES.REPLAYS)) {
+                const replayStore = db.createObjectStore(STORES.REPLAYS, { keyPath: 'sessionId' });
+                replayStore.createIndex('date', 'timestamp', { unique: false });
+              }
+            };
+          });
+        }
+
+        async saveSession(sessionData) {
+          if (!this.db) return;
+          const tx = this.db.transaction([STORES.SESSIONS], 'readwrite');
+          const store = tx.objectStore(STORES.SESSIONS);
+
+          const record = {
+            timestamp: Date.now(),
+            scenarioId: sessionData.scenarioId,
+            score: sessionData.score,
+            grade: sessionData.grade,
+            violations: sessionData.violations,
+            duration: sessionData.duration,
+            route: sessionData.route || [],
+            snapshot: sessionData.snapshot || null
+          };
+
+          return new Promise((resolve, reject) => {
+            const req = store.add(record);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+          });
+        }
+
+        async saveBalance(bal) {
+          if (!this.db) return;
+          const tx = this.db.transaction([STORES.SETTINGS], 'readwrite');
+          const store = tx.objectStore(STORES.SETTINGS);
+          return new Promise((res, rej) => {
+            const req = store.put({ key: 'playerBalance', value: bal });
+            req.onsuccess = () => res();
+            req.onerror = () => rej(req.error);
+          });
+        }
+
+        async loadBalance() {
+          if (!this.db) return 500;
+          const tx = this.db.transaction([STORES.SETTINGS], 'readonly');
+          const store = tx.objectStore(STORES.SETTINGS);
+          return new Promise((res) => {
+            const req = store.get('playerBalance');
+            req.onsuccess = () => res(req.result ? req.result.value : 500);
+            req.onerror = () => res(500);
+          });
+        }
+      }
+
+      const storageManager = new StorageManager();
 
       // -- CONSTANTS -----------------------------------------------
       const C = {
@@ -938,13 +1312,10 @@
         // Major EW: dual carriageway -- upper (z=-50) ONE-WAY eastbound,
         //           lower (z=-36) ONE-WAY westbound, separated by yellow median z=-43
         MAJ_UPPER_Z: -50, MAJ_LOWER_Z: -36, MAJ_MID_Z: -43,
-        // Major NS: dual carriageway -- left (x=-70) southbound, right (x=-56) northbound
-        MAJ_LEFT_X: -70, MAJ_RIGHT_X: -56,
         // Minor roads: TWO-WAY (solid yellow centre line)
-        MIN_H_Z: 30, MIN_V_X: 40,
-
+        MIN_H_Z: -105, MIN_H_BOT_Z: 40, MIN_V1_X: -30, PARK_Z: -80,
         // Roundabout (4 concentric lanes, clockwise, no lane changes)
-        RDT_X: 65, RDT_Z: -43, RDT_OUTER: 24, RDT_INNER: 12, RDT_LANE_W: 3,
+        RDT_X: 130, RDT_Z: -43, RDT_OUTER: 24, RDT_INNER: 12, RDT_LANE_W: 3,
         // Roundabout arm length (approach road from ring edge outward)
         RDT_ARM: 18,
 
@@ -965,7 +1336,7 @@
           1: ['left (90°)', 'straight (0°)'],
           2: ['straight (0°) ONLY'],
           3: ['straight (0°)', 'right (90°)'],
-          4: ['right (90°)', 'U-turn (180°)', '3rd exit (270°)', 'full circle (360°)']
+          4: ['right (90°)', '3rd exit (270° MAJ -> MIN)'] // NTSA rule: no U-turn from Lane 4 on major dual carriageways
         },
         minor: {
           1: ['left (90°)', 'straight (0°)'],
@@ -1088,53 +1459,37 @@
           const outerLine = box(ewLen, .13, .22, 0xffffff); outerLine.position.set(ewCx, .23, outerZ); world.add(outerLine);
         });
 
-        // Physical road divider island — raised concrete kerb with green top
-        // Runs from x=-130 to x=rdtWest=41, width=1.5m, height=0.15m
+        // Physical road divider island — simplified: only V1 crossing gap remains at -30 (v11)
         const DIV_W = 1.5, DIV_H = 0.15;
-        const divBody = box(ewLen, DIV_H, DIV_W, 0x888888);  // concrete kerb
-        divBody.position.set(ewCx, DIV_H / 2, C.MAJ_MID_Z); world.add(divBody);
-        const divTop = box(ewLen, 0.04, DIV_W - 0.2, 0x3a7a28);  // green verge top
-        divTop.position.set(ewCx, DIV_H + 0.02, C.MAJ_MID_Z); world.add(divTop);
-        // Yellow kerb-edge lines on both faces
-        const yTop = box(ewLen, 0.06, 0.08, 0xf5c400); yTop.position.set(ewCx, DIV_H + 0.03, C.MAJ_MID_Z - DIV_W / 2); world.add(yTop);
-        const yBot = box(ewLen, 0.06, 0.08, 0xf5c400); yBot.position.set(ewCx, DIV_H + 0.03, C.MAJ_MID_Z + DIV_W / 2); world.add(yBot);
-        yellowKerbs.push({ x: ewCx, z: C.MAJ_MID_Z, hw: ewLen / 2, hd: DIV_W / 2 + 0.1, noStop: true, isMedian: true });
+        const medianSegments = [
+          { start: -130, end: -36 }, // Continuous until V1
+          { start: -24, end: 41 }    // V1 Crossing gap: 12m
+        ];
 
-        // ── CENTRAL RESERVE U-TURN GAPS (logic only, no visual clutter) ──
-        [-100, -40, -10].forEach(gx => {
-          yieldSigns.push({ x: gx, z: C.MAJ_MID_Z, r: 5, isUTurnGap: true });
+        medianSegments.forEach(seg => {
+          const sLen = seg.end - seg.start;
+          const sx = (seg.start + seg.end) / 2;
+          const body = box(sLen, DIV_H, DIV_W, 0x888888); body.position.set(sx, DIV_H / 2, C.MAJ_MID_Z); world.add(body);
+          const top = box(sLen, 0.04, DIV_W - 0.2, 0x3a7a28); top.position.set(sx, DIV_H + 0.02, C.MAJ_MID_Z); world.add(top);
+
+          // Rounded ends (Cylinders) at junction mouths only
+          [seg.start, seg.end].forEach(ex => {
+            if (ex === -130 || ex === 41) return; // World bounds square
+            const cap = cyl(DIV_W / 2, DIV_W / 2, DIV_H, 16, 0x888888);
+            cap.position.set(ex, DIV_H / 2, C.MAJ_MID_Z); world.add(cap);
+            const capTop = cyl(DIV_W / 2 - 0.1, DIV_W / 2 - 0.1, 0.04, 16, 0x3a7a28);
+            capTop.position.set(ex, DIV_H + 0.02, C.MAJ_MID_Z); world.add(capTop);
+          });
+
+          // Yellow kerb lines
+          const yt = box(sLen, 0.06, 0.08, 0xf5c400); yt.position.set(sx, DIV_H + 0.03, C.MAJ_MID_Z - DIV_W / 2); world.add(yt);
+          const yb = box(sLen, 0.06, 0.08, 0xf5c400); yb.position.set(sx, DIV_H + 0.03, C.MAJ_MID_Z + DIV_W / 2); world.add(yb);
+          yellowKerbs.push({ x: sx, z: C.MAJ_MID_Z, hw: sLen / 2 + (seg.start === -130 || seg.end === 41 ? 0 : 0.5), hd: DIV_W / 2 + 0.1, noStop: true, isMedian: true });
         });
 
-        // ── NS ONE-WAY DUAL CARRIAGEWAY ──────────────────────────────
-        [{ x: C.MAJ_LEFT_X, dir: -1 }, { x: C.MAJ_RIGHT_X, dir: 1 }].forEach(({ x, dir }) => {
-          const r = box(C.MAJ_W, .2, 300, RC); r.position.set(x, .1, 0); world.add(r);
-          for (let l = 1; l < C.MAJ_LANES; l++) {
-            const lx = x - hw + l * lw;
-            for (let z = -130; z < 130; z += 8) {
-              const d = box(.18, .12, 4, 0xddddff); d.position.set(lx, .22, z); world.add(d);
-            }
-          }
-          // Outer solid edge only
-          const outerX = x + (dir > 0 ? hw : -hw);
-          const outerEdge = box(.22, .13, 300, 0xffffff); outerEdge.position.set(outerX, .23, 0); world.add(outerEdge);
-        });
-
-        // Yellow median NS
-        const jxNS = (C.MAJ_LEFT_X + C.MAJ_RIGHT_X) / 2; // -63
-        const ykns = box(.65, .34, 300, 0xf5c400); ykns.position.set(jxNS, .24, 0); world.add(ykns);
-        yellowKerbs.push({ x: jxNS, z: 0, hw: .55, hd: 150, noStop: true, isMedian: true });
-
-        // EW-NS intersection box
-        const junc = box(C.MAJ_W + 2, .22, C.MAJ_W * 2 + 2, RC);
-        junc.position.set(jxNS, .13, C.MAJ_MID_Z); world.add(junc);
-
-        // Zebra on EW dual carriageway, 1u from NS junction edges.
-        // Road runs EW → axis='ew'. Spans both carriageways (28u) centred at MAJ_MID_Z.
-        // West side: 1u west of NS junction west edge (jxNS-hw). 
-        //   Crossing depth=3, so centre = jxNS-hw - 1 - 1.5 = jxNS-hw-2.5
-        buildZebra(jxNS - hw - 2.5, C.MAJ_MID_Z, 'ew', C.MAJ_W * 2);
-        // East side: 1u east of NS junction east edge (jxNS+hw).
-        buildZebra(jxNS + hw + 2.5, C.MAJ_MID_Z, 'ew', C.MAJ_W * 2);
+        // Standalone zebra crossings on EW roads
+        buildZebra(-48, C.MAJ_UPPER_Z, 'ew', C.MAJ_W);
+        buildZebra(-48, C.MAJ_LOWER_Z, 'ew', C.MAJ_W);
       }
 
       function buildArrow(x, y, z, rot, s = 1) {
@@ -1145,107 +1500,123 @@
       function buildMinorRoads() {
         const RC = 0x252a32, hw = C.MIN_W / 2, lw = C.MIN_LW;
 
-        // Minor H road starts just east of NS major road right edge
-        // NS major right road: centred at x=C.MAJ_RIGHT_X=-56, half-width=C.MAJ_W/2=7
-        // So minor H starts at x = -56+7+1 = -48
-        const mhLeft = C.MAJ_RIGHT_X + C.MAJ_W / 2 + 1;   // -48
-        // Minor H road ends at x=100 (or where we want)
-        const mhRight = 100;
-        const mhLen = mhRight - mhLeft;
-        const mhCx = (mhLeft + mhRight) / 2;
+        // TOP HORIZONTAL ROAD (MIN_H_Z)
+        const hCz = C.MIN_H_Z, hLen = 340, hCx = 100; // spans across to roundabout
+        const mh = box(hLen, .2, C.MIN_W, RC); mh.position.set(hCx, .1, hCz); world.add(mh);
 
-        const mh = box(mhLen, .2, C.MIN_W, RC); mh.position.set(mhCx, .1, C.MIN_H_Z); world.add(mh);
-        // Yellow continuous centre line (two-way — no crossing)
-        const ycl = box(mhLen, .16, .3, 0xf5c400); ycl.position.set(mhCx, .23, C.MIN_H_Z); world.add(ycl);
-        yellowKerbs.push({ x: mhCx, z: C.MIN_H_Z, hw: mhLen / 2, hd: .4, isYellowLine: true, isCentreLine: true });
-        // Solid white outer edges
+        // Break yellow line strictly at V1 junction
+        const tLen1 = (C.MIN_V1_X - hw) - (hCx - hLen / 2);
+        if (tLen1 > 0) { const m1 = box(tLen1, .16, .3, 0xf5c400); m1.position.set((hCx - hLen / 2) + tLen1 / 2, .23, hCz); world.add(m1); }
+
+        const z1x = -18, z2x = 118;
+        buildZebra(z1x, hCz, 'ew', C.MIN_W);
+        buildZebra(z2x, hCz, 'ew', C.MIN_W);
+
+        // Solid yellow between zebras (no overtaking)
+        const solidLen = z2x - z1x;
+        const solidLine = box(solidLen, .16, .3, 0xf5c400);
+        solidLine.position.set((z1x + z2x) / 2, .23, hCz); world.add(solidLine);
+
+        // Broken line elsewhere
+        const seg_v1_edge = C.MIN_V1_X + hw;
+        const dash1Len = z1x - 2 - seg_v1_edge;
+        if (dash1Len > 0) {
+          for (let x = seg_v1_edge + 1; x < z1x - 2; x += 4) {
+            const d = box(2, .15, .3, 0xf5c400); d.position.set(x + 1, .23, hCz); world.add(d);
+          }
+        }
+        const rdt_edge = C.RDT_X - C.MAJ_W / 2;
+        const dash2Len = rdt_edge - (z2x + 2);
+        if (dash2Len > 0) {
+          for (let x = z2x + 2; x < rdt_edge - 1; x += 4) {
+            const d = box(2, .15, .3, 0xf5c400); d.position.set(x + 1, .23, hCz); world.add(d);
+          }
+        }
+
+        // ── FLUSH PARKING (SOUTH SIDE) ──
+        for (let x = z1x + 8; x < z2x - 8; x += 12) {
+          const by = .23, bz = hCz + hw - 0.2;
+          const bay = box(6, .14, .15, 0xffffff);
+          bay.position.set(x, by, bz); world.add(bay);
+          const bl1 = box(.15, .14, 2, 0xffffff); bl1.position.set(x - 3, by, hCz + hw + 1); world.add(bl1);
+          const bl2 = box(.15, .14, 2, 0xffffff); bl2.position.set(x + 3, by, hCz + hw + 1); world.add(bl2);
+          parkingBays.push({ x: x, z: hCz + hw + 0.5, ang: Math.PI / 2, side: 'south', type: 'parallel', occupied: null });
+        }
+
         [-hw, hw].forEach(dz => {
-          const e = box(mhLen, .13, .22, 0xffffff); e.position.set(mhCx, .23, C.MIN_H_Z + dz); world.add(e);
+          const e = box(hLen, .13, .22, 0xffffff); e.position.set(hCx, .23, hCz + dz); world.add(e);
         });
-        // Minor H road: single lane each direction — no inner divider needed.
-        // Overtaking zones (broken white on outer lane edge): every 40u, 15u broken section
-        // Non-overtaking sections: solid white on outer side of each lane
-        // Overtaking zones centred at x=-10, x=40, x=70 (every ~40u)
-        const OT_ZONES = [-10, 40, 70]; // x centres of overtaking zones
-        const OT_LEN = 15; // length of broken section
-        [-1, 1].forEach(side => {
-          const lz = C.MIN_H_Z + side * (lw + lw / 2); // outer edge of each lane
-          let x = mhLeft + 4;
-          while (x < mhRight - 4) {
-            // Check if inside an overtaking zone
-            const inOT = OT_ZONES.some(ox => Math.abs(x - ox) < OT_LEN / 2);
-            // Skip around T-junction
-            if (Math.abs(x - C.MIN_V_X) < lw * 2) { x += 3; continue; }
-            if (inOT) {
-              // Broken line (overtaking allowed)
-              const d = box(3, .12, .16, 0xdddddd); d.position.set(x, .23, lz); world.add(d);
-              x += 5;
-            } else {
-              // Solid line (no overtaking)
-              const d = box(6, .12, .16, 0xdddddd); d.position.set(x, .23, lz); world.add(d);
-              x += 7;
-            }
+        for (let l = 1; l < C.MIN_LANES; l++) {
+          const lz = hCz - hw + l * C.MIN_LW;
+          for (let x = hCx - hLen / 2 + 4; x < hCx + hLen / 2 - 4; x += 8) {
+            const d = box(4, .12, .18, 0xddddff); d.position.set(x, .22, lz); world.add(d);
           }
+        }
+
+        // V1 ROAD (Vertical Crossing)
+        const vBot = 115, vTop = -115, vLen = vBot - vTop, vCz = (vTop + vBot) / 2;
+        const vx = C.MIN_V1_X;
+        const mv = box(C.MIN_W, .2, vLen, RC); mv.position.set(vx, .1, vCz); world.add(mv);
+
+        // Yellow line segments for V1 (breaks at all junctions)
+        const ySegments = [
+          { s: -115, e: -109 }, // North of H_TOP
+          { s: -101, e: -84 },  // North of Parking
+          { s: -76, e: -57 },   // North of Highway
+          { s: -29, e: 36 },    // South of Highway
+          { s: 44, e: 115 }     // South of H_BOT
+        ];
+        ySegments.forEach(seg => {
+          const sLen = seg.e - seg.s;
+          const yc = box(.3, .16, sLen, 0xf5c400); yc.position.set(vx, .23, (seg.s + seg.e) / 2); world.add(yc);
         });
 
-        // Minor V road (x=40) runs from below EW lower major road down to z=80
-        // EW lower road: centred at z=C.MAJ_LOWER_Z=-36, hw=7 -> bottom edge z=-29
-        const mvTop = C.MAJ_LOWER_Z + C.MAJ_W / 2 + 1;  // -28
-        const mvBot = 80;
-        const mvLen = mvBot - mvTop;
-        const mvCz = (mvTop + mvBot) / 2;
-
-        const mv = box(C.MIN_W, .2, mvLen, RC); mv.position.set(C.MIN_V_X, .1, mvCz); world.add(mv);
-        const ycv = box(.3, .16, mvLen, 0xf5c400); ycv.position.set(C.MIN_V_X, .23, mvCz); world.add(ycv);
-        yellowKerbs.push({ x: C.MIN_V_X, z: mvCz, hw: .4, hd: mvLen / 2, isYellowLine: true, isCentreLine: true });
-        // Solid white outer edges
         [-hw, hw].forEach(dx => {
-          const e = box(.22, .13, mvLen, 0xffffff); e.position.set(C.MIN_V_X + dx, .23, mvCz); world.add(e);
+          const e = box(.22, .13, vLen, 0xffffff); e.position.set(vx + dx, .23, vCz); world.add(e);
         });
-        // Minor V: solid/broken mix (NS direction)
-        const OT_ZONES_V = [20, 50]; // z centres of overtaking zones
-        const OT_LEN_V = 15;
-        [-1, 1].forEach(side => {
-          const lx = C.MIN_V_X + side * (lw + lw / 2);
-          let z = mvTop + 4;
-          while (z < mvBot - 4) {
-            if (Math.abs(z - C.MIN_H_Z) < lw * 2) { z += 3; continue; }
-            const inOT = OT_ZONES_V.some(oz => Math.abs(z - oz) < OT_LEN_V / 2);
-            if (inOT) {
-              const d = box(.16, .12, 3, 0xdddddd); d.position.set(lx, .23, z); world.add(d);
-              z += 5;
-            } else {
-              const d = box(.16, .12, 6, 0xdddddd); d.position.set(lx, .23, z); world.add(d);
-              z += 7;
-            }
+        for (let l = 1; l < C.MIN_LANES; l++) {
+          const lx = vx - hw + l * C.MIN_LW;
+          for (let z = vTop + 4; z < vBot - 4; z += 8) {
+            if (Math.abs(z - C.MIN_H_Z) < 8 || Math.abs(z - C.PARK_Z) < 8 || Math.abs(z - C.MAJ_MID_Z) < 18 || Math.abs(z - C.MIN_H_BOT_Z) < 8) continue;
+            const d = box(.18, .12, 4, 0xddddff); d.position.set(lx, .22, z); world.add(d);
           }
+        }
+
+        // T-Junctions overlapping Major Road
+        const juncMAJ = box(C.MIN_W, .22, C.MAJ_W, 0x1e2228); juncMAJ.position.set(vx, .13, C.MAJ_UPPER_Z); world.add(juncMAJ);
+        const juncMAJ2 = box(C.MIN_W, .22, C.MAJ_W, 0x1e2228); juncMAJ2.position.set(vx, .13, C.MAJ_LOWER_Z); world.add(juncMAJ2);
+
+        // T-Junctions overlapping Minor Roads
+        const juncTop = box(C.MIN_W, .22, C.MIN_W, 0x1e2228); juncTop.position.set(vx, .13, C.MIN_H_Z); world.add(juncTop);
+        const juncBot = box(C.MIN_W, .22, C.MIN_W, 0x1e2228); juncBot.position.set(vx, .13, C.MIN_H_BOT_Z); world.add(juncBot);
+
+        // SOUTH HORIZONTAL ROAD (MIN_H_BOT_Z)
+        const shz = C.MIN_H_BOT_Z, shLen = 340, shCx = 100;
+        const sh = box(shLen, .2, C.MIN_W, RC); sh.position.set(shCx, .1, shz); world.add(sh);
+        for (let x = shCx - shLen / 2 + 1; x < shCx + shLen / 2 - 1; x += 4) {
+          if (Math.abs(x - vx) < 4) continue;
+          const d = box(2, .15, .3, 0xf5c400); d.position.set(x + 1, .23, shz); world.add(d);
+        }
+        [-hw, hw].forEach(dz => {
+          const e = box(shLen, .13, .22, 0xffffff); e.position.set(shCx, .23, shz + dz); world.add(e);
         });
+        for (let l = 1; l < C.MIN_LANES; l++) {
+          const lz = shz - hw + l * C.MIN_LW;
+          for (let x = shCx - shLen / 2 + 4; x < shCx + shLen / 2 - 4; x += 8) {
+            if (Math.abs(x - vx) < 8) continue;
+            const d = box(4, .12, .18, 0xddddff); d.position.set(x, .22, lz); world.add(d);
+          }
+        }
 
-        // Minor H/V T-junction fill
-        const tj = box(C.MIN_W + 1, .2, C.MIN_W + 1, RC);
-        tj.position.set(C.MIN_V_X, .11, C.MIN_H_Z); world.add(tj);
+        // Zebras and Signs for V1 / Highway Junction
+        buildZebra(vx, C.MAJ_UPPER_Z - C.MAJ_W / 2 - 4, 'ns', C.MIN_W);
+        buildZebra(vx, C.MAJ_LOWER_Z + C.MAJ_W / 2 + 4, 'ns', C.MIN_W);
+        stopSigns.push({ x: vx, z: C.MAJ_UPPER_Z - C.MAJ_W / 2 - 5, r: 8, stopHeld: 0, passed: false });
+        stopSigns.push({ x: vx, z: C.MAJ_LOWER_Z + C.MAJ_W / 2 + 5, r: 8, stopHeld: 0, passed: false });
 
-        // Stop signs
-        // Minor H entering NS major road (from east):
-        world.add(buildStopSignPost(mhLeft + 1, C.MIN_H_Z + hw + 1.5, 0));
-        stopSigns.push({ x: mhLeft + 4, z: C.MIN_H_Z, r: 8, stopHeld: 0, passed: false });
-        const sl1 = box(C.MIN_W, .13, .3, 0xffffff); sl1.position.set(mhLeft + 3, .22, C.MIN_H_Z); world.add(sl1);
-        // Minor V entering minor H (from north):
-        world.add(buildStopSignPost(C.MIN_V_X + hw + 1.5, C.MIN_H_Z - 6, Math.PI / 2));
-        stopSigns.push({ x: C.MIN_V_X, z: C.MIN_H_Z - 4, r: 8, stopHeld: 0, passed: false });
-        const sl2 = box(.3, .13, C.MIN_W, 0xffffff); sl2.position.set(C.MIN_V_X, .22, C.MIN_H_Z - 3); world.add(sl2);
-
-        // Zigzag no-stop zones
-        buildZigzag(mhLeft + 6, C.MIN_H_Z, 'ew');
-        buildZigzag(C.MIN_V_X, C.MIN_H_Z + 6, 'ns');
-
-        // Zebra crossings - full road width, at least 15u from junctions
-        // On minor H road: 18u east of NS major road
-        buildZebra(mhLeft + 18, C.MIN_H_Z, 'ew', C.MIN_W);
-        // On minor V road: 18u below EW lower major road
-        buildZebra(C.MIN_V_X, mvTop + 18, 'ns', C.MIN_W);
-        // Store minor road bounds for parking reference
-        C._mhLeft = mhLeft; C._mvTop = mvTop; C._mhBot = C.MIN_H_Z + hw; C._mvRight = C.MIN_V_X + hw;
+        // Roundabout North Arm T-Junction to Top Minor Road
+        const juncN = box(C.MAJ_W, .22, C.MIN_W * 2, 0x1e2228);
+        juncN.position.set(C.RDT_X, .14, C.MIN_H_Z); world.add(juncN);
       }
 
       function buildZigzag(x, z, axis) {
@@ -1294,12 +1665,17 @@
         }
         // Stop line: 1m past crossing centre (on departure side), perpendicular to road
         if (axis === 'ew') {
-          const sl = new THREE.Mesh(new THREE.BoxGeometry(roadW, 0.05, 0.4), slMat);
-          sl.position.set(cx, 0.23, cz + span / 2 + 1.0);
+          // If axis is 'ew', road runs EW. Stop line crosses the road, so its length is in Z.
+          const sl = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.05, roadW), slMat);
+          // Stop line is placed at X = cx +/- span/2. Let's just put it slightly offset.
+          // The old code assumed traffic direction, we'll just center it properly or use cx.
+          sl.position.set(cx + span / 2 + 1.0, 0.23, cz);
           world.add(sl);
         } else {
-          const sl = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.05, roadW), slMat);
-          sl.position.set(cx + span / 2 + 1.0, 0.23, cz);
+          // If axis is 'ns', road runs NS. Stop line length is in X.
+          const sl = new THREE.Mesh(new THREE.BoxGeometry(roadW, 0.05, 0.4), slMat);
+          // Stop line is placed at Z = cz
+          sl.position.set(cx, 0.23, cz + span / 2 + 1.0);
           world.add(sl);
         }
         zebras.push({ cx, cz, axis, roadW, w: axis === 'ew' ? SL : span, d: axis === 'ew' ? span : SL, pedPhase: 'wait' });
@@ -1477,28 +1853,31 @@
         // E / N / S ARMS — standard 14u wide
         // ═══════════════════════════════════════════════════════════════
         [
-          { a: 0, ARM_LEN: 22, label: 'E' },
-          { a: -Math.PI / 2, ARM_LEN: 26, label: 'N' },
-          { a: Math.PI / 2, ARM_LEN: 50, label: 'S' },
-        ].forEach(({ a, ARM_LEN, label }) => {
+          { a: 0, ARM_LEN: 22, label: 'E', isMajor: true },
+          { a: -Math.PI / 2, ARM_LEN: Math.abs(cz - C.MIN_H_Z) - oR, label: 'N', isMajor: false },
+          { a: Math.PI / 2, ARM_LEN: 50, label: 'S', isMajor: false },
+        ].forEach(({ a, ARM_LEN, label, isMajor }) => {
           const cosA = Math.cos(a), sinA = Math.sin(a);
+          const roadW = isMajor ? C.MAJ_W : C.MIN_W;
+          const roadHW = roadW / 2;
 
           // Road slab extends under ring to eliminate edge gaps
           const extLen = ARM_LEN + oR;
           const armCx = cx + cosA * (oR + ARM_LEN / 2 - oR / 2);
           const armCz = cz + sinA * (oR + ARM_LEN / 2 - oR / 2);
-          const surf = box(extLen, .22, C.MAJ_W, 0x1e2228);
+          const surf = box(extLen, .22, roadW, 0x1e2228);
           surf.rotation.y = a; surf.position.set(armCx, .11, armCz); world.add(surf);
 
           // Outer solid edges
-          [-hw, hw].forEach(s => {
+          [-roadHW, roadHW].forEach(s => {
             const pt = ap(a, ARM_LEN / 2, s);
             const el = box(ARM_LEN, .13, .22, 0xffffff);
             el.rotation.y = a; el.position.set(pt.x, .25, pt.z); world.add(el);
           });
 
-          // Broken lane dividers (3 dividers for 4 lanes)
-          [-C.MAJ_LW, 0, C.MAJ_LW].forEach(s => {
+          // Broken lane dividers
+          const divs = isMajor ? [-C.MAJ_LW, 0, C.MAJ_LW] : [-1.6, 1.6];
+          divs.forEach(s => {
             for (let d = 4; d < ARM_LEN - 1; d += 4) {
               const pt = ap(a, d + 1.5, s);
               const dm = box(.13, .14, 1.8, 0xddddff);
@@ -1509,14 +1888,14 @@
           // Stop line at junction mouth (d=0.5)
           {
             const slPt = ap(a, 0.5, 0);
-            const sl = box(C.MAJ_W + .3, .16, .48, 0xffffff);
+            const sl = box(roadW + .3, .16, .48, 0xffffff);
             sl.rotation.y = a; sl.position.set(slPt.x, .27, slPt.z); world.add(sl);
           }
 
           // Traffic lights at junction CORNERS — outside road (verge), not on road
           {
-            const tlPt1 = ap(a, 0.5, -(hw + 1.5));
-            const tlPt2 = ap(a, 0.5, (hw + 1.5));
+            const tlPt1 = ap(a, 0.5, -(roadHW + 1.5));
+            const tlPt2 = ap(a, 0.5, (roadHW + 1.5));
             const tlRot = a + Math.PI / 2;
             buildTLSet(tlPt1.x, tlPt1.z, tlRot);
             buildTLSet(tlPt2.x, tlPt2.z, tlRot);
@@ -1526,31 +1905,27 @@
           {
             const zpt = ap(a, 5, 0);
             const zbAxis = Math.abs(cosA) > .5 ? 'ew' : 'ns'; // road runs EW→axis='ew', NS→axis='ns'
-            buildZebra(zpt.x, zpt.z, zbAxis, C.MAJ_W);
+            buildZebra(zpt.x, zpt.z, zbAxis, roadW);
           }
 
           // (Yield marks on road omitted — kept as logic-only via yieldSigns array)
 
           // Yield sign on left verge at d=0.5
           {
-            const gyPt = ap(a, 0.5, -(hw + 2.2));
+            const gyPt = ap(a, 0.5, -(roadHW + 2.2));
             world.add(buildYieldSign(gyPt.x, gyPt.z, a + Math.PI));
-            yieldSigns.push({ x: ap(a, 1, 0).x, z: ap(a, 1, 0).z, r: hw * 1.1, isRoundabout: true });
+            yieldSigns.push({ x: ap(a, 1, 0).x, z: ap(a, 1, 0).z, r: roadHW * 1.1, isRoundabout: true });
           }
 
           // Warning sign on left verge furthest back
           {
-            const wpt = ap(a, ARM_LEN - 1, -(hw + 2.5));
+            const wpt = ap(a, ARM_LEN - 1, -(roadHW + 2.5));
             buildWarnSign(wpt.x, wpt.z);
           }
 
           // S arm special: extend to minor H road and add junction box
           if (label === 'S') {
-            const minHSouth = C.MIN_H_Z + C.MIN_W / 2;
-            const armSouthEnd = cz + oR + ARM_LEN; // z = -43+24+50 = 31
-            // Junction box where S arm meets minor H road
-            const jbox = box(C.MAJ_W, .22, C.MIN_W + 1, 0x1e2228);
-            jbox.position.set(cx, .13, C.MIN_H_Z); world.add(jbox);
+            // No South arm T-junction needed for this layout. Minor road forms T-junction at major road instead.
           }
         });
       }
@@ -1573,128 +1948,68 @@
       //   North exit: aisle connects to minor H road directly (gap filled)
       //   South wall: bays end, aisle continues to z=lotTop+18 with exit road south
       // Parallel parking: west side, simple parallel bays along road
+      const parkingBays = [];
       function buildParkingLots() {
-        const roadSouth = C.MIN_H_Z + C.MIN_W / 2;  // 34.8 = south edge of minor H road
-        const lotTop = roadSouth;               // lot starts flush with road south edge
+        const roadSouth = C.MIN_H_Z + C.MIN_W / 2;  // -77.8
+        const roadNorth = C.MAJ_UPPER_Z - C.MAJ_W / 2; // -57
+
+        // Horizontal Aisle at C.PARK_Z (between V1 and V2)
+        const AISLE_Z = C.PARK_Z;
+        const AISLE_X1 = C.MIN_V1_X; // -30
+        const AISLE_X2 = C.RDT_X; // 130
+        const AISLE_H = 8;
+        const AISLE_W = AISLE_X2 - AISLE_X1;
 
         // ── SEDAN DIAGONAL PARKING ────────────────────────────────────
-        // Position: x=47..87, z=lotTop..lotTop+20
-        const LOT_X1 = 47, LOT_X2 = 87, LOT_Z1 = lotTop, LOT_Z2 = lotTop + 20;
-        const LOT_CX = (LOT_X1 + LOT_X2) / 2;  // 67
-        const LOT_W = LOT_X2 - LOT_X1;       // 40
-        const LOT_D = LOT_Z2 - LOT_Z1;       // 20
-        const AISLE_X1 = 63, AISLE_X2 = 71;  // 8u wide 2-way centre aisle
-        const AISLE_W = AISLE_X2 - AISLE_X1; // 8u
-        const AISLE_CX = (AISLE_X1 + AISLE_X2) / 2; // 67
+        // Lot spans between V1 and V2, centered on AISLE_Z
+        const LOT_X1 = AISLE_X1, LOT_X2 = AISLE_X2;
+        const LOT_Z1 = AISLE_Z - 12, LOT_Z2 = AISLE_Z + 12;
+        const LOT_CX = (LOT_X1 + LOT_X2) / 2;
+        const LOT_W = LOT_X2 - LOT_X1;
+        const LOT_D = LOT_Z2 - LOT_Z1;
 
         // Lot ground (dark asphalt)
         const gnd = box(LOT_W, .2, LOT_D, 0x252830);
-        gnd.position.set(LOT_CX, .11, (LOT_Z1 + LOT_Z2) / 2); world.add(gnd);
+        gnd.position.set(LOT_CX, .11, AISLE_Z); world.add(gnd);
 
-        // Centre aisle (slightly lighter — active road)
-        const aisle = box(AISLE_W, .22, LOT_D, 0x1e2228);
-        aisle.position.set(AISLE_CX, .12, (LOT_Z1 + LOT_Z2) / 2); world.add(aisle);
+        // Horizontal aisle (slightly lighter — active road)
+        const aisle = box(LOT_W, .22, AISLE_H, 0x1e2228);
+        aisle.position.set(LOT_CX, .12, AISLE_Z); world.add(aisle);
 
         // Aisle centre line (yellow dashed — 2-way)
-        for (let z = LOT_Z1 + 1; z < LOT_Z2 - 1; z += 3) {
-          const d = box(.3, .14, 1.5, 0xf5c400); d.position.set(AISLE_CX, .23, z + .75); world.add(d);
+        for (let x = LOT_X1 + 1; x < LOT_X2 - 1; x += 3) {
+          const d = box(1.5, .14, .3, 0xf5c400); d.position.set(x + .75, .23, AISLE_Z); world.add(d);
         }
 
         // Aisle edge lines (white solid — lane boundaries)
-        [AISLE_X1, AISLE_X2].forEach(ax => {
-          const el = box(.2, .14, LOT_D, 0xffffff); el.position.set(ax, .23, (LOT_Z1 + LOT_Z2) / 2); world.add(el);
+        [AISLE_Z - AISLE_H / 2, AISLE_Z + AISLE_H / 2].forEach(az => {
+          const el = box(LOT_W, .14, .2, 0xffffff); el.position.set(LOT_CX, .23, az); world.add(el);
         });
 
-        // Lot outer boundary lines
-        [LOT_X1, LOT_X2].forEach(bx => {
-          const el = box(.18, .14, LOT_D, 0x888888); el.position.set(bx, .23, (LOT_Z1 + LOT_Z2) / 2); world.add(el);
-        });
-
-        // ── LEFT DIAGONAL BAYS (x=LOT_X1..AISLE_X1) ──
-        // Bays angled at 60° to aisle (30° from east-west)
-        // Each bay ~3u wide, ~5u deep, angled
-        const BAY_W = 3.2, BAY_D = 5.0, BAY_ANG = Math.PI / 3; // 60°
-        const leftW = AISLE_X1 - LOT_X1; // 16u
-        const nBaysL = Math.floor(leftW * Math.sin(Math.PI / 2 - BAY_ANG) / BAY_W) + 1; // ~4 bays
-        const baysL = 5;
-        const baySpacingL = (LOT_D - 3) / (baysL);
-        for (let i = 0; i < baysL; i++) {
-          const bz = LOT_Z1 + 2 + i * baySpacingL + baySpacingL / 2;
-          const bx = (LOT_X1 + AISLE_X1) / 2;
-          // Bay divider line (angled)
-          const bl = box(.15, .14, BAY_D, 0xffffff);
+        // ── NORTH BAYS (Above aisle) ──
+        const BAY_ANG = Math.PI / 3; // 60 deg
+        const bays = 8; // Reduce count to clear roads
+        const baySpacing = (LOT_W - 30) / bays; // Padding at ends
+        for (let i = 0; i <= bays; i++) {
+          const bx = LOT_X1 + 10 + i * baySpacing; // Start 10m after V1
+          if (bx > C.RDT_X - 15) continue; // End 15m before Roundabout Arm
+          const bl = box(.15, .14, 6, 0xffffff);
           bl.rotation.y = BAY_ANG;
-          bl.position.set(bx, .23, bz); world.add(bl);
+          bl.position.set(bx, .23, AISLE_Z - 6); world.add(bl);
+          parkingBays.push({ x: bx, z: AISLE_Z - 6, ang: BAY_ANG, side: 'north', occupied: null });
         }
-        // Left bay area label
-        buildParkSign(LOT_X1 + 8, (LOT_Z1 + LOT_Z2) / 2, 'ANGLE', '← BAYS');
 
-        // ── RIGHT DIAGONAL BAYS (x=AISLE_X2..LOT_X2) ──
-        const baysR = 5;
-        const baySpacingR = (LOT_D - 3) / baysR;
-        for (let i = 0; i < baysR; i++) {
-          const bz = LOT_Z1 + 2 + i * baySpacingR + baySpacingR / 2;
-          const bx = (AISLE_X2 + LOT_X2) / 2;
-          const bl = box(.15, .14, BAY_D, 0xffffff);
-          bl.rotation.y = -BAY_ANG; // mirror angle
-          bl.position.set(bx, .23, bz); world.add(bl);
+        // ── SOUTH BAYS (Below aisle) ──
+        for (let i = 0; i <= bays; i++) {
+          const bx = LOT_X1 + 10 + i * baySpacing;
+          if (bx > C.RDT_X - 15) continue;
+          const bl = box(.15, .14, 6, 0xffffff);
+          bl.rotation.y = -BAY_ANG;
+          bl.position.set(bx, .23, AISLE_Z + 6); world.add(bl);
+          parkingBays.push({ x: bx, z: AISLE_Z + 6, ang: -BAY_ANG, side: 'south', occupied: null });
         }
-        buildParkSign(LOT_X2 - 8, (LOT_Z1 + LOT_Z2) / 2, 'ANGLE', 'BAYS →');
 
-        // ── AISLE EXIT ROADS (north and south of lot onto minor H road) ──
-        // North exit: aisle x=63..71 connects flush to minor H road (z=roadSouth)
-        // The aisle starts at z=lotTop=roadSouth, so north mouth IS at minor H road edge.
-        // Add a junction patch to blend the aisle into the road:
-        const northJunc = box(AISLE_W, .22, 2, 0x1e2228);
-        northJunc.position.set(AISLE_CX, .12, roadSouth - 1); world.add(northJunc);
-        // White give-way line at north aisle mouth
-        const gwN = box(AISLE_W, .15, .35, 0xffffff);
-        gwN.position.set(AISLE_CX, .26, roadSouth + .5); world.add(gwN);
-
-        // South exit road: aisle extends 4u south of lot to give room to join road
-        const southExit = box(AISLE_W, .22, 4, 0x1e2228);
-        southExit.position.set(AISLE_CX, .12, LOT_Z2 + 2); world.add(southExit);
-        // South exit edge lines
-        [AISLE_X1, AISLE_X2].forEach(ax => {
-          const el = box(.2, .14, 6, 0xffffff); el.position.set(ax, .23, LOT_Z2 + 2); world.add(el);
-        });
-
-        // Yield signs at both aisle exits (on verge, not in road)
-        world.add(buildYieldSign(AISLE_X1 - 2.5, roadSouth + 1, Math.PI));
-        world.add(buildYieldSign(AISLE_X1 - 2.5, LOT_Z2 + 2, 0));
-
-        parkingZones.push({ type: 'angle', x: AISLE_CX, z: (LOT_Z1 + LOT_Z2) / 2, hw: LOT_W / 2, hd: LOT_D / 2, entryG: 'D', exitG: 'R' });
-
-        // ── PARALLEL PARKING (west side, x=-30..14, z=lotTop..lotTop+8) ──
-        const PAR_X1 = -30, PAR_X2 = 14, PAR_Z1 = lotTop, PAR_Z2 = lotTop + 8;
-        const PAR_CX = (PAR_X1 + PAR_X2) / 2;  // -8
-        const PAR_W = PAR_X2 - PAR_X1;       // 44
-        const PAR_D = PAR_Z2 - PAR_Z1;       // 8
-        const nPar = Math.floor(PAR_W / 5);  // ~8 bays at 5u each
-
-        const ppGnd = box(PAR_W, .2, PAR_D, 0x252830);
-        ppGnd.position.set(PAR_CX, .11, (PAR_Z1 + PAR_Z2) / 2); world.add(ppGnd);
-
-        // Parallel bay dividers (N-S lines, spaced 5u apart)
-        const bayW = PAR_W / nPar;
-        for (let i = 0; i <= nPar; i++) {
-          const lx = PAR_X1 + i * bayW;
-          const bl = box(.15, .14, PAR_D, 0xffffff); bl.position.set(lx, .23, (PAR_Z1 + PAR_Z2) / 2); world.add(bl);
-        }
-        // Front and back lines
-        [PAR_Z1 + .1, PAR_Z2 - .1].forEach(bz => {
-          const fl = box(PAR_W, .14, .18, 0xffffff); fl.position.set(PAR_CX, .23, bz); world.add(fl);
-        });
-
-        // Access aisle alongside road (EW, 4u wide) — between lot north edge and road
-        // Lot north is flush with road south edge (z=roadSouth=PAR_Z1).
-        // Give-way at road junction
-        const gwPar = box(PAR_W, .15, .35, 0xffffff);
-        gwPar.position.set(PAR_CX, .26, roadSouth + .5); world.add(gwPar);
-        world.add(buildYieldSign(PAR_X1 - 2.5, roadSouth + 1, Math.PI));
-
-        buildParkSign(PAR_CX, (PAR_Z1 + PAR_Z2) / 2, 'PARALLEL', 'R IN D OUT');
-        parkingZones.push({ type: 'parallel', x: PAR_CX, z: (PAR_Z1 + PAR_Z2) / 2, hw: PAR_W / 2, hd: PAR_D / 2, entryG: 'R', exitG: 'D' });
+        parkingZones.push({ type: 'angle', x: LOT_CX, z: AISLE_Z, hw: LOT_W / 2, hd: LOT_D / 2, entryG: 'D', exitG: 'R' });
       }
 
       function buildParkSign(x, z, type, sub) {
@@ -1705,37 +2020,34 @@
 
       // -- ENVIRONMENT ----------------------------------------------
       function buildEnvironment() {
-        // Buildings positioned clear of all roads and parking areas.
-        // Minor H road z=25..35. Parking z=35..58. Keep buildings south of z=60 or north of z=20.
-        // [x, z, width, height, depth, colour]
-        [[85, 80, 18, 32, 14, 0x8a9eb8],   // was z=65 → moved to z=80 (clear of parking)
-        [-105, 65, 22, 42, 16, 0x7a8e9a],
-        [85, -82, 15, 26, 12, 0x9aab8a],
-        [-105, -82, 20, 36, 18, 0xa09080],
-        [92, 50, 12, 21, 10, 0x886ea0],   // was [85,22] encroaching minor H → moved to x=92,z=50
-        [-32, 72, 16, 23, 14, 0x9a7060],
-        [18, -82, 14, 19, 11, 0x708090],
-        [-32, -82, 18, 29, 15, 0x607060],
-        [100, -10, 10, 16, 8, 0x778899]]
-          .forEach(([x, z, w, h, d, col]) => {
-            const b2 = box(w, h, d, col); b2.position.set(x, h / 2, z); world.add(b2);
-            const rf = box(w + .7, .9, d + .7, dk(col, .72)); rf.position.set(x, h + .45, z); world.add(rf);
-          });
-        // Trees
+        // Buildings moved to outer green area (>20m from roads)
+        const buildings = [
+          [100, 50, 20, 35, 15, 0x8a9eb8],
+          [-100, 50, 22, 42, 16, 0x7a8e9a],
+          [200, 50, 18, 28, 14, 0x9aab8a],
+          [-200, 50, 25, 40, 20, 0xa09080],
+          [100, -150, 15, 25, 12, 0x886ea0],
+          [-100, -150, 20, 30, 16, 0x9a7060],
+          [200, -150, 14, 19, 11, 0x708090],
+          [-200, -150, 18, 29, 15, 0x607060],
+          [0, -150, 12, 18, 10, 0x778899]
+        ];
+        buildings.forEach(([x, z, w, h, d, col]) => {
+          const b2 = box(w, h, d, col); b2.position.set(x, h / 2, z); world.add(b2);
+          const rf = box(w + .7, .9, d + .7, dk(col, .72)); rf.position.set(x, h + .45, z); world.add(rf);
+        });
+
+        // Trees spaced out
         [
-          [110, 45], [110, -45], [110, 5], [110, -20], [110, 25],
-          [-125, 45], [-125, -45], [-125, 5], [25, 60], [45, 60], [-12, 60],
-          [25, -70], [45, -70], [65, -70], [-5, 50], [-5, -55]
+          [150, 80], [150, -80], [-150, 80], [-150, -80],
+          [50, 120], [-50, 120], [50, -160], [-50, -160],
+          [220, 40], [-220, 40]
         ].forEach(([x, z]) => addTree(x, z));
-        // Street lights – on road VERGE, outside carriageway
-        // EW upper road: south verge (z < MAJ_UPPER_Z - hw = -57), use z=-58.5
-        // EW lower road: north verge (z > MAJ_LOWER_Z + hw = -29), use z=-27.5
-        const slu_z = C.MAJ_UPPER_Z - C.MAJ_W / 2 - 1.5;   // -58.5 (south verge of upper EW)
-        const sll_z = C.MAJ_LOWER_Z + C.MAJ_W / 2 + 1.5;   // -27.5 (north verge of lower EW)
-        const sll_x = C.MAJ_LEFT_X - C.MAJ_W / 2 - 1.5;   // -78.5 (west verge of left NS)
-        const slr_x = C.MAJ_RIGHT_X + C.MAJ_W / 2 + 1.5;   // -47.5 (east verge of right NS)
-        for (let x = -120; x <= 120; x += 20) { addSL(x, slu_z); addSL(x, sll_z); }
-        for (let z = -120; z <= 120; z += 20) { addSL(sll_x, z); addSL(slr_x, z); }
+
+        // Street lights
+        const slu_z = C.MAJ_UPPER_Z - C.MAJ_W / 2 - 1.5;
+        const sll_z = C.MAJ_LOWER_Z + C.MAJ_W / 2 + 1.5;
+        for (let x = -150; x <= 250; x += 40) { addSL(x, slu_z); addSL(x, sll_z); }
       }
       function addTree(x, z) {
         const t = cyl(.35, .46, 3, 8, 0x5c3d1e); t.position.set(x, 1.5, z); world.add(t);
@@ -1767,16 +2079,7 @@
         // No-entry signs placed on left NS road verge (one-way)
         // world.add(buildNoEntrySign(...)); // omit to keep roads clean
 
-        // ── TRAFFIC LIGHTS at main EW-NS intersection ───────────────
-        // Spec: at corners of junction (verge/pavement, outside carriageway)
-        // Junction centre: x=(MAJ_LEFT_X+MAJ_RIGHT_X)/2=-63, z=MAJ_MID_Z=-43
-        // Road half-width hw=7.  Place TLs 1.5u outside road edge at each corner.
-        const jx = (C.MAJ_LEFT_X + C.MAJ_RIGHT_X) / 2;   // -63
-        const tlOff = hw + 1.5;                      // 8.5u from junction centre
-        buildTLSet(jx - tlOff, C.MAJ_MID_Z - tlOff, 0);        // SW corner (outside road)
-        buildTLSet(jx + tlOff, C.MAJ_MID_Z - tlOff, Math.PI);   // SE corner
-        buildTLSet(jx - tlOff, C.MAJ_MID_Z + tlOff, 0);         // NW corner
-        buildTLSet(jx + tlOff, C.MAJ_MID_Z + tlOff, Math.PI);   // NE corner
+
       }
 
       function buildTLSet(x, z, rot) {
@@ -1907,29 +2210,29 @@
       // acc=2 keeps cars tightly on the arc.
       const RING_ARC = {
         // Lane 1: r=22.5, ring-surface entry at x=44.4 (outer ring edge at z=-55.25)
-        1: [wp(44.4, -55.25, 5.5, 2), wp(44.0, -51.0, 5.5, 2), wp(42.9, -47.2, 5.5, 2), wp(42.5, -43.3, 5.5, 2),
-        wp(42.8, -39.4, 5.5, 2), wp(43.8, -35.6, 5.5, 2), wp(45.4, -32.0, 5.5, 2), wp(47.6, -28.7, 5.5, 2),
-        wp(50.3, -25.9, 5.5, 2), wp(53.5, -23.7, 5.5, 2), wp(57.0, -22.0, 5.5, 2), wp(60.8, -20.9, 5.5, 2),
-        wp(64.7, -20.5, 5.5, 2), wp(68.6, -20.8, 5.5, 2), wp(72.4, -21.8, 5.5, 2), wp(76.0, -23.4, 5.5, 2),
-        wp(79.3, -25.6, 5.5, 2), wp(82.1, -28.3, 5.5, 2), wp(84.3, -31.5, 5.5, 2)],
+        1: [wp(109.4, -55.25, 5.5, 2), wp(109.0, -51.0, 5.5, 2), wp(107.9, -47.2, 5.5, 2), wp(107.5, -43.3, 5.5, 2),
+        wp(107.8, -39.4, 5.5, 2), wp(108.8, -35.6, 5.5, 2), wp(110.4, -32.0, 5.5, 2), wp(112.6, -28.7, 5.5, 2),
+        wp(115.3, -25.9, 5.5, 2), wp(118.5, -23.7, 5.5, 2), wp(122.0, -22.0, 5.5, 2), wp(125.8, -20.9, 5.5, 2),
+        wp(129.7, -20.5, 5.5, 2), wp(133.6, -20.8, 5.5, 2), wp(137.4, -21.8, 5.5, 2), wp(141.0, -23.4, 5.5, 2),
+        wp(144.3, -25.6, 5.5, 2), wp(147.1, -28.3, 5.5, 2), wp(149.3, -31.5, 5.5, 2)],
         // Lane 2: r=19.5, ring-surface entry at x=42.7 (outer ring edge at z=-51.75)
-        2: [wp(42.7, -51.75, 5.4, 2), wp(45.9, -46.8, 5.4, 2), wp(45.5, -43.5, 5.4, 2), wp(45.7, -40.1, 5.4, 2),
-        wp(46.5, -36.8, 5.4, 2), wp(47.9, -33.7, 5.4, 2), wp(49.8, -30.8, 5.4, 2), wp(52.1, -28.4, 5.4, 2),
-        wp(54.8, -26.4, 5.4, 2), wp(57.9, -24.8, 5.4, 2), wp(61.2, -23.9, 5.4, 2), wp(64.5, -23.5, 5.4, 2),
-        wp(67.9, -23.7, 5.4, 2), wp(71.2, -24.5, 5.4, 2), wp(74.3, -25.9, 5.4, 2), wp(77.2, -27.8, 5.4, 2),
-        wp(79.6, -30.1, 5.4, 2), wp(81.6, -32.8, 5.4, 2), wp(83.2, -35.9, 5.4, 2)],
+        2: [wp(107.7, -51.75, 5.4, 2), wp(110.9, -46.8, 5.4, 2), wp(110.5, -43.5, 5.4, 2), wp(110.7, -40.1, 5.4, 2),
+        wp(111.5, -36.8, 5.4, 2), wp(112.9, -33.7, 5.4, 2), wp(114.8, -30.8, 5.4, 2), wp(117.1, -28.4, 5.4, 2),
+        wp(119.8, -26.4, 5.4, 2), wp(122.9, -24.8, 5.4, 2), wp(126.2, -23.9, 5.4, 2), wp(129.5, -23.5, 5.4, 2),
+        wp(132.9, -23.7, 5.4, 2), wp(136.2, -24.5, 5.4, 2), wp(139.3, -25.9, 5.4, 2), wp(142.2, -27.8, 5.4, 2),
+        wp(144.6, -30.1, 5.4, 2), wp(146.6, -32.8, 5.4, 2), wp(148.2, -35.9, 5.4, 2)],
         // Lane 3: r=16.5, ring-surface entry at x=41.6
-        3: [wp(41.6, -48.25, 5.3, 2), wp(48.5, -43.8, 5.3, 2), wp(48.6, -40.9, 5.3, 2), wp(49.3, -38.1, 5.3, 2),
-        wp(50.3, -35.4, 5.3, 2), wp(51.9, -33.0, 5.3, 2), wp(53.8, -30.9, 5.3, 2), wp(56.1, -29.1, 5.3, 2),
-        wp(58.6, -27.8, 5.3, 2), wp(61.4, -26.9, 5.3, 2), wp(64.2, -26.5, 5.3, 2), wp(67.1, -26.6, 5.3, 2),
-        wp(69.9, -27.3, 5.3, 2), wp(72.6, -28.3, 5.3, 2), wp(75.0, -29.9, 5.3, 2), wp(77.1, -31.8, 5.3, 2),
-        wp(78.9, -34.1, 5.3, 2), wp(80.2, -36.6, 5.3, 2), wp(81.1, -39.4, 5.3, 2)],
+        3: [wp(106.6, -48.25, 5.3, 2), wp(113.5, -43.8, 5.3, 2), wp(113.6, -40.9, 5.3, 2), wp(114.3, -38.1, 5.3, 2),
+        wp(115.3, -35.4, 5.3, 2), wp(116.9, -33.0, 5.3, 2), wp(118.8, -30.9, 5.3, 2), wp(121.1, -29.1, 5.3, 2),
+        wp(123.6, -27.8, 5.3, 2), wp(126.4, -26.9, 5.3, 2), wp(129.2, -26.5, 5.3, 2), wp(132.1, -26.6, 5.3, 2),
+        wp(134.9, -27.3, 5.3, 2), wp(137.6, -28.3, 5.3, 2), wp(140.0, -29.9, 5.3, 2), wp(142.1, -31.8, 5.3, 2),
+        wp(143.9, -34.1, 5.3, 2), wp(145.2, -36.6, 5.3, 2), wp(146.1, -39.4, 5.3, 2)],
         // Lane 4: r=13.5, ring-surface entry at x=41.1
-        4: [wp(41.1, -44.75, 5.2, 2), wp(51.6, -41.6, 5.2, 2), wp(52.0, -39.3, 5.2, 2), wp(52.8, -37.1, 5.2, 2),
-        wp(54.1, -35.1, 5.2, 2), wp(55.6, -33.3, 5.2, 2), wp(57.4, -31.8, 5.2, 2), wp(59.5, -30.7, 5.2, 2),
-        wp(61.7, -29.9, 5.2, 2), wp(64.0, -29.5, 5.2, 2), wp(66.4, -29.6, 5.2, 2), wp(68.7, -30.0, 5.2, 2),
-        wp(70.9, -30.8, 5.2, 2), wp(72.9, -32.1, 5.2, 2), wp(74.7, -33.6, 5.2, 2), wp(76.2, -35.4, 5.2, 2),
-        wp(77.3, -37.5, 5.2, 2), wp(78.1, -39.7, 5.2, 2), wp(78.5, -42.0, 5.2, 2)],
+        4: [wp(106.1, -44.75, 5.2, 2), wp(116.6, -41.6, 5.2, 2), wp(117.0, -39.3, 5.2, 2), wp(117.8, -37.1, 5.2, 2),
+        wp(119.1, -35.1, 5.2, 2), wp(120.6, -33.3, 5.2, 2), wp(122.4, -31.8, 5.2, 2), wp(124.5, -30.7, 5.2, 2),
+        wp(126.7, -29.9, 5.2, 2), wp(129.0, -29.5, 5.2, 2), wp(131.4, -29.6, 5.2, 2), wp(133.7, -30.0, 5.2, 2),
+        wp(135.9, -30.8, 5.2, 2), wp(137.9, -32.1, 5.2, 2), wp(139.7, -33.6, 5.2, 2), wp(141.2, -35.4, 5.2, 2),
+        wp(142.3, -37.5, 5.2, 2), wp(143.1, -39.7, 5.2, 2), wp(143.5, -42.0, 5.2, 2)],
       };
 
       // Exit Z (ring) → nearest lower-road lane Z
@@ -1970,30 +2273,35 @@
       }
 
       const AI_CHAINS = [
-        buildRdtChain(1),  // outer ring – keep left
-        buildRdtChain(1),  // outer ring – keep left
-        buildRdtChain(1),  // outer ring – keep left
-        buildRdtChain(1),  // outer ring – keep left
-        [wp(-130, majLaneCentre(C.MAJ_UPPER_Z, 1), 9.5), wp(RDT_W_MOUTH - 4, majLaneCentre(C.MAJ_UPPER_Z, 1), 7.0)],
-        [wp(RDT_E_MOUTH + 4, loLane(1), 9.5), wp(-130, loLane(1), 9.5)],
-        [wp(-50, minLaneCentre(C.MIN_H_Z, 1), 6.5), wp(95, minLaneCentre(C.MIN_H_Z, 1), 6.5)],
-        [wp(95, minLaneCentre(C.MIN_H_Z, 3), 7.0), wp(-50, minLaneCentre(C.MIN_H_Z, 3), 7.0)],
+        buildRdtChain(1),
+        buildRdtChain(2),
+        buildRdtChain(3),
+        buildRdtChain(4),
+        [wp(-130, majLaneCentre(C.MAJ_UPPER_Z, 1), 9.5), wp(102, majLaneCentre(C.MAJ_UPPER_Z, 1), 7.0)], // EW Major Eastbound
+        [wp(158, loLane(1), 9.5), wp(-130, loLane(1), 9.5)], // EW Major Westbound
+        [wp(minLaneCentre(C.MIN_V1_X, 1), 115, 6.5), wp(minLaneCentre(C.MIN_V1_X, 1), -115, 6.5)], // V1 Northbound
+        [wp(minLaneCentre(C.MIN_V1_X, 3), -115, 6.5), wp(minLaneCentre(C.MIN_V1_X, 3), 115, 6.5)], // V1 Southbound
+        [wp(-110, minLaneCentre(C.MIN_H_Z, 1), 6.5), wp(110, minLaneCentre(C.MIN_H_Z, 1), 6.5)], // TOP Eastbound
+        [wp(110, minLaneCentre(C.MIN_H_Z, 3), 6.5), wp(-110, minLaneCentre(C.MIN_H_Z, 3), 6.5)], // TOP Westbound
+        [wp(-110, minLaneCentre(C.MIN_H_BOT_Z, 1), 6.5), wp(110, minLaneCentre(C.MIN_H_BOT_Z, 1), 6.5)], // BOT Eastbound
+        [wp(110, minLaneCentre(C.MIN_H_BOT_Z, 3), 6.5), wp(-110, minLaneCentre(C.MIN_H_BOT_Z, 3), 6.5)], // BOT Westbound
       ];
 
-      // Loop restart index per chain (to avoid teleporting to x=-130)
-      const CHAIN_LOOP_WPI = [1, 1, 1, 1, 0, 0, 0, 0]; // rdt chains loop to wpi=1 (x=-60), past invisible x=-130 z-reset
+      // Loop restart index per chain
+      const CHAIN_LOOP_WPI = [1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0];
 
       const AICOLORS = [0xff3311, 0x22aa44, 0xffaa00, 0x8844cc, 0x00aaff, 0xff6688, 0x44ffcc, 0xff8800, 0xeeeeee, 0x884422];
       const aiVehicles = [];
 
+
       function spawnAI(n) {
         aiVehicles.forEach(v => scene.remove(v.m)); aiVehicles.length = 0;
-        const total = Math.min(n, AI_CHAINS.length);
+        parkingBays.forEach(b => b.occupied = null);
+        spawnParkedCars(); const total = Math.min(n, AI_CHAINS.length);
         for (let i = 0; i < total; i++) {
           const chain = AI_CHAINS[i];
           const m = buildAiCar(AICOLORS[i % AICOLORS.length]);
-          // Stagger only within approach road (wpi 0-4) — never start inside ring arc
-          const startWpi = Math.min(i % 4, chain.length - 1);  // clamp to chain length (short chains have < 4 wpts)
+          const startWpi = Math.min(i % 4, chain.length - 1);
           const w = chain[startWpi];
           m.position.set(w.x, .38, w.z);
           m.rotation.y = 0;
@@ -2003,7 +2311,31 @@
             loopWpi: CHAIN_LOOP_WPI[i] || 0,
             spd: w.spd * (0.85 + Math.random() * 0.3),
             stalled: false, stallTimer: 0, stallFlash: 0,
+            state: 'cruising', unparkTimer: 0,
+            intent: 'straight', signalFlash: 0, hornTimer: 0, hasHorned: false
           });
+        }
+      }
+
+      function spawnParkedCars() {
+        const slots = parkingBays.slice();
+        for (let i = 0; i < 15; i++) {
+          const idx = Math.floor(Math.random() * slots.length);
+          const bay = slots.splice(idx, 1)[0];
+          const m = buildAiCar(AICOLORS[Math.floor(Math.random() * AICOLORS.length)]);
+          m.position.set(bay.x, .38, bay.z);
+          m.rotation.y = bay.ang;
+          const v = {
+            m, chain: AI_CHAINS[0], // fallback chain
+            wpi: 1, loopWpi: 1,
+            spd: 0,
+            stalled: false,
+            state: 'parked',
+            bay: bay, unparkTimer: 10 + Math.random() * 60,
+            intent: 'straight', signalFlash: 0, hornTimer: 0, hasHorned: false
+          };
+          bay.occupied = v;
+          aiVehicles.push(v);
         }
       }
 
@@ -2011,10 +2343,26 @@
         const g = new THREE.Group();
         const b = box(1.9, .65, 4.0, color); b.position.y = .5; g.add(b);
         const c = box(1.6, .6, 2.0, color); c.position.set(0, 1.1, .1); g.add(c);
-        [[-0.62, .5, -2.1], [0.62, .5, -2.1]].forEach(([x, y, z]) => {
+
+        // Headlights (White, Front is +2.05)
+        [[-0.62, .5, 2.05], [0.62, .5, 2.05]].forEach(([x, y, z]) => {
           const hl = new THREE.Mesh(new THREE.BoxGeometry(.3, .2, .08), mat(0xffffcc));
           hl.position.set(x, y, z); g.add(hl);
         });
+        // Taillights (Red, Back is -2.05)
+        [[-0.62, .5, -2.05], [0.62, .5, -2.05]].forEach(([x, y, z]) => {
+          const tl = new THREE.Mesh(new THREE.BoxGeometry(.3, .2, .08), mat(0xff0000));
+          tl.position.set(x, y, z); g.add(tl);
+        });
+
+        // Indicators
+        const sigL = [], sigR = [];
+        const fl = new THREE.Mesh(new THREE.BoxGeometry(.2, .15, .1), mat(0x222200)); fl.position.set(-0.85, .5, 2.05); g.add(fl); sigL.push(fl);
+        const fr = new THREE.Mesh(new THREE.BoxGeometry(.2, .15, .1), mat(0x222200)); fr.position.set(0.85, .5, 2.05); g.add(fr); sigR.push(fr);
+        const bl = new THREE.Mesh(new THREE.BoxGeometry(.2, .15, .1), mat(0x222200)); bl.position.set(-0.85, .5, -2.05); g.add(bl); sigL.push(bl);
+        const br = new THREE.Mesh(new THREE.BoxGeometry(.2, .15, .1), mat(0x222200)); br.position.set(0.85, .5, -2.05); g.add(br); sigR.push(br);
+        g.sigL = sigL; g.sigR = sigR;
+
         [[1, 0, -1.4], [-1, 0, -1.4], [1, 0, 1.4], [-1, 0, 1.4]].forEach(([x, y, z]) => {
           const w = cyl(.35, .35, .26, 12, 0x1a1a1a); w.rotation.z = Math.PI / 2;
           w.position.set(x, y, z); g.add(w);
@@ -2044,6 +2392,43 @@
       function updateAI(dt) {
         aiVehicles.forEach((v, vi) => {
           if (v.stalled) return;
+
+          if (v.state === 'parked') {
+            v.unparkTimer -= dt;
+            if (v.unparkTimer <= 0) {
+              v.state = 'leaving';
+              v.spd = 0;
+              // Choose a destination vertical road (V1 or V2)
+              // Choose a destination: V1 or Roundabout connection
+              v.targetVx = Math.random() > 0.5 ? C.MIN_V1_X : C.RDT_X - 10;
+            }
+            return;
+          }
+
+          if (v.state === 'leaving') {
+            const isParallel = v.bay && v.bay.type === 'parallel';
+            v.spd = isParallel ? 2.5 : -2.5; // forward for parallel, reverse for angle
+            const myX = v.m.position.x, myZ = v.m.position.z;
+            const targetZ = isParallel ? C.MIN_H_Z : C.PARK_Z;
+            const distToAisle = Math.abs(myZ - targetZ);
+
+            if (distToAisle < 0.2) {
+              v.state = 'cruising';
+              v.spd = 4;
+              const destX = v.targetVx;
+              v.chain = [wp(destX, targetZ, 6, 2), wp(destX, -100, 8)];
+              v.wpi = 0; v.loopWpi = 1;
+              v.m.rotation.y = destX > v.m.position.x ? Math.PI / 2 : -Math.PI / 2;
+            } else {
+              v.m.position.x += Math.sin(v.m.rotation.y) * v.spd * dt;
+              v.m.position.z += Math.cos(v.m.rotation.y) * v.spd * dt;
+              // Turn while leaving to face the exit
+              if (!isParallel) v.m.rotation.y += (v.bay.side === 'north' ? 0.3 : -0.3) * dt;
+              else v.m.rotation.y += (v.targetVx > v.m.position.x ? 0.1 : -0.1) * dt;
+            }
+            return;
+          }
+
           const chain = v.chain;
           const target = chain[v.wpi];
           const myX = v.m.position.x, myZ = v.m.position.z;
@@ -2066,7 +2451,51 @@
             const pdx = playerCar.position.x - myX, pdz = playerCar.position.z - myZ;
             const fwd = pdx * Math.sin(headAng) + pdz * Math.cos(headAng);
             const lat = Math.abs(pdx * Math.cos(headAng) - pdz * Math.sin(headAng));
-            if (fwd > 0 && fwd < 9 && lat < 2.0) desiredSpd = Math.min(desiredSpd, 1.0);
+            if (fwd > -2 && fwd < 15 && lat < 2.5) {
+              // If player is directly in front, AI should match speed or stop to "follow"
+              // Overtaking logic would belong here, but stopping firmly handles the "follow" requirement safely.
+              desiredSpd = 0;
+            } else if (fwd > 15 && fwd < 30 && lat < 2.5) {
+              // Slow down gracefully
+              desiredSpd = Math.min(desiredSpd, Math.max(0, ph.speed - 0.5));
+            }
+          }
+          // Evaluate intent
+          const afterNext = chain[(v.wpi + 1) % chain.length];
+          v.intent = 'straight';
+          if (target && afterNext) {
+            const dx1 = target.x - myX, dz1 = target.z - myZ;
+            const dx2 = afterNext.x - target.x, dz2 = afterNext.z - target.z;
+            const a1 = Math.atan2(dx1, dz1), a2 = Math.atan2(dx2, dz2);
+            let diff = a2 - a1;
+            while (diff > Math.PI) diff -= Math.PI * 2; while (diff < -Math.PI) diff += Math.PI * 2;
+            if (diff > 0.3) v.intent = 'left';
+            else if (diff < -0.3) v.intent = 'right';
+
+            // Roundabout approach logic
+            const isRdtEntry = (Math.hypot(target.x - C.RDT_X, target.z - C.RDT_Z) < C.RDT_OUTER + 5) &&
+              (Math.hypot(myX - C.RDT_X, myZ - C.RDT_Z) > C.RDT_OUTER + 5);
+            if (isRdtEntry) v.intent = 'roundabout'; // NTSA Rule: Signal right
+          }
+
+          // Apply indicators
+          v.signalFlash = (v.signalFlash + dt) % 0.8;
+          const isOn = v.signalFlash < 0.4;
+          const lCol = (v.intent === 'left' && isOn) ? 0xff8800 : 0x222200;
+          const rCol = ((v.intent === 'right' || v.intent === 'roundabout') && isOn) ? 0xff8800 : 0x222200;
+          v.m.sigL.forEach(m => m.material.color.setHex(lCol));
+          v.m.sigR.forEach(m => m.material.color.setHex(rCol));
+
+          // Contextual Horn (Trigger once if stuck)
+          if (desiredSpd === 0 && v.spd < 0.1) {
+            v.hornTimer += dt;
+            if (v.hornTimer > 3 && !v.hasHorned) {
+              v.hasHorned = true;
+              if (audioManager.isInitialized) audioManager.triggerHorn(0.5); // Contextual AI Horn
+            }
+          } else {
+            v.hornTimer = 0;
+            v.hasHorned = false;
           }
 
           // ── Smooth speed ──
@@ -2116,9 +2545,11 @@
           const paveDist = zb.roadW / 2 + 1.5; // stand just off road edge
           let sx, sz;
           if (zb.axis === 'ew') {
-            sx = zb.cx + side * paveDist; sz = zb.cz + (Math.random() - .5) * 1.5;
-          } else {
+            // For EW road, zebras are across Z, so peds spawn at Z offset
             sx = zb.cx + (Math.random() - .5) * 1.5; sz = zb.cz + side * paveDist;
+          } else {
+            // For NS road, zebras are across X, so peds spawn at X offset
+            sx = zb.cx + side * paveDist; sz = zb.cz + (Math.random() - .5) * 1.5;
           }
           g.position.set(sx, 0, sz);
           scene.add(g);
@@ -2135,45 +2566,99 @@
         return nearest ? nearest.state : 'red';
       }
 
+      class PedestrianSignalController {
+        constructor() {
+          this.phaseDur = { RED_MAN: 5, GREEN_MAN: 6, FLASHING_GREEN: 3 };
+        }
+        update(dt) {
+          zebras.forEach((zb) => {
+            if (!zb.pedState) {
+              zb.pedState = 'RED_MAN'; zb.pedTimer = 0;
+              zb.waitingPeds = []; zb.activePeds = [];
+              zb.signalMesh = new THREE.Mesh(new THREE.BoxGeometry(.3, .6, .3), mat(0xff0000));
+              if (zb.axis === 'ew') zb.signalMesh.position.set(zb.cx - zb.roadW / 2 - 1, .4, zb.cz + 2);
+              else zb.signalMesh.position.set(zb.cx + 2, .4, zb.cz - zb.roadW / 2 - 1);
+              scene.add(zb.signalMesh);
+            }
+            zb.pedTimer += dt;
+            const tlState = getNearestTLState(zb.cx, zb.cz);
+
+            switch (zb.pedState) {
+              case 'RED_MAN':
+                if (tlState === 'red' && zb.pedTimer > this.phaseDur.RED_MAN) {
+                  if (zb.waitingPeds.length > 0) {
+                    zb.pedState = 'GREEN_MAN'; zb.pedTimer = 0;
+                    this.releasePedestrians(zb);
+                  }
+                }
+                break;
+              case 'GREEN_MAN':
+                if (zb.pedTimer > this.phaseDur.GREEN_MAN) {
+                  zb.pedState = 'FLASHING_GREEN'; zb.pedTimer = 0;
+                }
+                break;
+              case 'FLASHING_GREEN':
+                if (zb.pedTimer > this.phaseDur.FLASHING_GREEN) {
+                  zb.pedState = 'RED_MAN'; zb.pedTimer = 0;
+                }
+                break;
+            }
+            if (zb.signalMesh) {
+              const c = zb.pedState === 'GREEN_MAN' ? 0x00ff00 : zb.pedState === 'FLASHING_GREEN' && zb.pedTimer % 0.5 < 0.25 ? 0x00ff00 : 0xff0000;
+              zb.signalMesh.material.color.setHex(c);
+            }
+          });
+        }
+        releasePedestrians(zb) {
+          zb.waitingPeds.forEach(p => {
+            p.crossing = true;
+            if (p.zb.axis === 'ew') {
+              p.targetX = p.zb.cx;
+              p.targetZ = p.zb.cz - p.side * (p.zb.roadW / 2 + 1.8);
+            } else {
+              p.targetX = p.zb.cx - p.side * (p.zb.roadW / 2 + 1.8);
+              p.targetZ = p.zb.cz;
+            }
+            zb.activePeds.push(p);
+          });
+          zb.waitingPeds = [];
+        }
+      }
+
+      const pedSignalController = new PedestrianSignalController();
+
       function updatePeds(dt) {
+        pedSignalController.update(dt);
         peds.forEach(p => {
           p.waitTimer -= dt;
-          // Get nearest TL state to this crossing
-          const tlState = getNearestTLState(p.zb.cx, p.zb.cz);
-          const canCross = (tlState === 'green');
 
           if (!p.crossing) {
-            // Standing on pavement -- do not wander, just face the road
-            if (p.waitTimer <= 0 && canCross) {
-              p.crossing = true;
-              // Target: opposite pavement
-              if (p.zb.axis === 'ew') {
-                p.targetX = p.zb.cx - p.side * (p.zb.roadW / 2 + 1.8);
-                p.targetZ = p.zb.cz;
-              } else {
-                p.targetX = p.zb.cx;
-                p.targetZ = p.zb.cz - p.side * (p.zb.roadW / 2 + 1.8);
-              }
+            // Standing on pavement
+            if (p.waitTimer <= 0 && !p.zb.waitingPeds.includes(p)) {
+              p.zb.waitingPeds.push(p);
             }
           } else {
             const dx = p.targetX - p.m.position.x;
             const dz = p.targetZ - p.m.position.z;
             const dist = Math.sqrt(dx * dx + dz * dz);
             if (dist > 0.25) {
-              const spd = 1.1 * dt;
+              const spd = 1.6 * dt; // walk speed
               p.m.position.x += dx / dist * spd;
               p.m.position.z += dz / dist * spd;
               p.m.rotation.y = Math.atan2(dx, dz);
-              // walking bob
-              p.m.position.y = Math.abs(Math.sin(sessTime * 5)) * 0.08;
+
+              const walkPhase = Math.sin(sessTime * 8);
+              p.m.children[2].rotation.x = walkPhase * 0.4;
+              p.m.children[3].rotation.x = -walkPhase * 0.4;
+              p.m.position.y = Math.abs(walkPhase) * 0.05;
             } else {
-              // Reached far pavement
               p.m.position.x = p.targetX;
               p.m.position.z = p.targetZ;
               p.m.position.y = 0;
               p.crossing = false;
               p.side = -p.side;
               p.waitTimer = 5 + Math.random() * 10;
+              p.zb.activePeds = p.zb.activePeds.filter(x => x !== p);
             }
           }
 
@@ -2190,7 +2675,7 @@
       // -- PHYSICS --------------------------------------------------
       const keys = {};
       let sigL = false, sigR = false, sigTimer = 0, hornOn = false;
-      const ph = { speed: 0, heading: 0, steer: 0, gear: 'N', braking: false };
+      const ph = { speed: 0, heading: 0, steer: 0, gear: 'N', braking: false, auto: false };
 
       window.addEventListener('keydown', e => {
         keys[e.code] = true;
@@ -2201,6 +2686,7 @@
         if (e.code === 'Digit1') setGear('R');
         if (e.code === 'Digit2') setGear('N');
         if (e.code === 'Digit3') setGear('D');
+        if (e.code === 'KeyZ') toggleAuto();
       });
       window.addEventListener('keyup', e => {
         keys[e.code] = false;
@@ -2216,7 +2702,10 @@
         document.querySelectorAll('.gi').forEach(el => el.classList.toggle('active', el.dataset.g === g));
       }
       function hornTrigger() {
+        if (!audioManager.isInitialized) audioManager.initialize();
         document.getElementById('ih').classList.add('on');
+        audioManager.triggerHorn();
+
         // Check if near pedestrian crossing -- penalty
         if (playerCar && gameRunning) {
           peds.forEach(p => {
@@ -2227,8 +2716,217 @@
         }
       }
 
+      function updateAutoDrive(dt, sc) {
+        if (!ph.auto || !playerCar || !sc) return;
+        const pos = playerCar.position, dest = sc.destPos;
+        const dx = dest.x - pos.x, dz = dest.z - pos.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < 4) {
+          ph.speed = Math.max(0, ph.speed - C.BRAKE * dt); ph.steer *= 0.8;
+          if (ph.speed < 0.1) { ph.auto = false; document.getElementById('bau').classList.remove('active'); logEvt('📡 Destination Reached - Auto-Pilot Off', true); }
+          return;
+        }
+        let targetH = Math.atan2(dx, dz), diff = targetH - ph.heading;
+        while (diff > Math.PI) diff -= Math.PI * 2; while (diff < -Math.PI) diff += Math.PI * 2;
+        ph.steer = Math.max(-C.MAX_STEER, Math.min(C.MAX_STEER, diff * 1.6));
+        const cap = inParkingZone() ? C.SPD_PARK : C.SPD_MIN;
+        let obstacle = false;
+        aiVehicles.forEach(v => {
+          if (pos.distanceTo(v.m.position) < 12) {
+            let ad = Math.atan2(v.m.position.x - pos.x, v.m.position.z - pos.z) - ph.heading;
+            while (ad > Math.PI) ad -= Math.PI * 2; while (ad < -Math.PI) ad += Math.PI * 2;
+            if (Math.abs(ad) < Math.PI / 3) obstacle = true;
+          }
+        });
+        if (obstacle) ph.speed = Math.max(0, ph.speed - C.BRAKE * dt);
+        else ph.speed = Math.min(ph.speed + C.ACCEL * dt, cap);
+      }
+
+      let touchSteer = 0;
+      let touchAccel = 0;
+      let touchBrake = false;
+      let usingTouch = false;
+
+      // -- TOUCH INPUT MANAGER ---------------------------------------
+      class TouchInputManager {
+        constructor() {
+          this.canvas = document.getElementById('cw'); // attach to canvas wrapper
+          this.activePointers = new Map();
+          this.gestureState = {
+            type: null,
+            startDistance: 0
+          };
+          this.setupEventListeners();
+          this.createVirtualJoystick(document.getElementById('v-joystick-container'));
+          this.setupButtons();
+        }
+
+        setupEventListeners() {
+          this.canvas.addEventListener('pointerdown', this.onPointerDown.bind(this));
+          this.canvas.addEventListener('pointermove', this.onPointerMove.bind(this));
+          this.canvas.addEventListener('pointerup', this.onPointerUp.bind(this));
+          this.canvas.addEventListener('pointercancel', this.onPointerUp.bind(this));
+          this.canvas.style.touchAction = 'none';
+
+          // Mobile menu toggles
+          const lp = document.getElementById('lp');
+          const rp = document.getElementById('rp');
+          document.getElementById('btn-menu-left')?.addEventListener('click', () => { lp.classList.toggle('open'); rp.classList.remove('open'); });
+          document.getElementById('btn-menu-right')?.addEventListener('click', () => { rp.classList.toggle('open'); lp.classList.remove('open'); });
+        }
+
+        setupButtons() {
+          const bindBtn = (id, key, actL, actR) => {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); usingTouch = true; if (key) keys[key] = true; if (actL) { sigL = !sigL; sigR = false; updSigUI(); } if (actR) { sigR = !sigR; sigL = false; updSigUI(); } });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); if (key) keys[key] = false; });
+          };
+          bindBtn('mb-brk', 'Space');
+          document.getElementById('mb-sigl')?.addEventListener('touchstart', (e) => { e.preventDefault(); sigL = !sigL; sigR = false; updSigUI(); });
+          document.getElementById('mb-sigr')?.addEventListener('touchstart', (e) => { e.preventDefault(); sigR = !sigR; sigL = false; updSigUI(); });
+          document.getElementById('mb-horn')?.addEventListener('touchstart', (e) => { e.preventDefault(); hornTrigger(); });
+          document.getElementById('mb-horn')?.addEventListener('touchend', (e) => { e.preventDefault(); document.getElementById('ih').classList.remove('on'); });
+        }
+
+        onPointerDown(e) {
+          if (e.target.closest('.mobile-btn') || e.target.closest('.virtual-joystick')) return;
+          this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          if (this.activePointers.size === 1) {
+            this.gestureState.type = 'camera';
+          }
+        }
+
+        onPointerMove(e) {
+          if (!this.activePointers.has(e.pointerId) || this.gestureState.type !== 'camera') return;
+          usingTouch = true;
+          const pointer = this.activePointers.get(e.pointerId);
+          const dx = e.clientX - pointer.x;
+          // Simple orbit roughly matching desktop MouseDrag
+          orbitCam(dx * -0.01);
+          pointer.x = e.clientX;
+          pointer.y = e.clientY;
+        }
+
+        onPointerUp(e) {
+          this.activePointers.delete(e.pointerId);
+          if (this.activePointers.size === 0) this.gestureState.type = null;
+        }
+
+        createVirtualJoystick(container) {
+          if (!container) return;
+          const joystick = document.createElement('div');
+          joystick.className = 'virtual-joystick';
+          const stick = document.createElement('div');
+          stick.className = 'joystick-stick';
+          joystick.appendChild(stick);
+
+          let active = false;
+          let rect, centerX, centerY, maxRadius;
+
+          const updateJoystick = (e) => {
+            let clientX = e.clientX, clientY = e.clientY;
+            if (e.touches && e.touches.length > 0) {
+              clientX = e.touches[0].clientX;
+              clientY = e.touches[0].clientY;
+            } else if (e.changedTouches && e.changedTouches.length > 0) {
+              clientX = e.changedTouches[0].clientX;
+              clientY = e.changedTouches[0].clientY;
+            }
+
+            const dx = clientX - centerX;
+            const dy = clientY - centerY;
+            const dist = Math.min(maxRadius, Math.hypot(dx, dy));
+            const angle = Math.atan2(dy, dx);
+
+            const stickX = dist * Math.cos(angle);
+            const stickY = dist * Math.sin(angle);
+            stick.style.transform = `translate(calc(-50% + ${stickX}px), calc(-50% + ${stickY}px))`;
+
+            // Map to inputs: X = steering (-1 to 1), Y = accel/brake (-1 to 1)
+            // Y inverted: up is negative in UI, positive accel
+            touchSteer = stickX / maxRadius;
+            touchAccel = -(stickY / maxRadius);
+
+            // Auto trigger gear/brake depending on Y
+            if (touchAccel > 0.2) {
+              if (ph.gear !== 'D') setGear('D');
+              touchBrake = false;
+            } else if (touchAccel < -0.2) {
+              // Only go into Reverse if basically stopped
+              if (Math.abs(ph.speed) < 1 && ph.gear !== 'R') {
+                setGear('R');
+              } else if (ph.speed > 1) {
+                // If moving forward, pulling back puts you in neutral and breaks
+                touchBrake = true;
+                touchAccel = 0;
+              } else {
+                touchAccel = Math.abs(touchAccel); // Drive backwards
+              }
+            } else {
+              touchAccel = 0;
+              touchBrake = false;
+            }
+          };
+
+          const handleStart = (e) => {
+            e.preventDefault();
+            active = true;
+            usingTouch = true;
+            rect = joystick.getBoundingClientRect();
+            centerX = rect.left + rect.width / 2;
+            centerY = rect.top + rect.height / 2;
+            maxRadius = rect.width / 2;
+            updateJoystick(e);
+          };
+
+          const handleMove = (e) => {
+            if (!active) return;
+            e.preventDefault();
+            updateJoystick(e);
+          };
+
+          const handleEnd = (e) => {
+            e.preventDefault();
+            active = false;
+            touchSteer = 0;
+            touchAccel = 0;
+            touchBrake = false;
+            stick.style.transform = `translate(-50%, -50%)`;
+            // Auto neutral when let go
+            if (ph.gear !== 'N' && Math.abs(ph.speed) < 1) setGear('N');
+          };
+
+          joystick.addEventListener('touchstart', handleStart, { passive: false });
+          joystick.addEventListener('touchmove', handleMove, { passive: false });
+          joystick.addEventListener('touchend', handleEnd, { passive: false });
+          joystick.addEventListener('touchcancel', handleEnd, { passive: false });
+
+          container.appendChild(joystick);
+        }
+      }
+
       function physicsStep(dt, sc) {
         if (!playerCar || !gameRunning) return;
+
+        // -- BALANCE PRE-CHECK: block movement if no credit --
+        if (playerBalance <= 0) {
+          // Bring car to a stop
+          ph.speed = ph.speed > 0
+            ? Math.max(0, ph.speed - C.BRAKE * dt)
+            : Math.min(0, ph.speed + C.BRAKE * dt);
+          playerCar.position.x += Math.sin(ph.heading) * ph.speed * dt;
+          playerCar.position.z += Math.cos(ph.heading) * ph.speed * dt;
+          playerCar.rotation.y = ph.heading;
+          const mod = document.getElementById('topup-mod');
+          if (mod && mod.style.display !== 'flex') {
+            document.getElementById('tu-bal').textContent = playerBalance.toFixed(2);
+            document.getElementById('tu-dist').textContent = distTrav.toFixed(0);
+            mod.style.display = 'flex';
+          }
+          return;
+        }
+
         const fwd = keys['ArrowUp'] || keys['KeyW'];
         const bwd = keys['ArrowDown'] || keys['KeyS'];
         const lft = keys['ArrowLeft'] || keys['KeyA'];
@@ -2240,15 +2938,31 @@
         const inMin = onMinorRoad();
         const cap = inPark ? C.SPD_PARK : inRdt ? C.SPD_RDT : inMin ? C.SPD_MIN : C.SPD_MAJ;
 
-        if (ph.gear === 'D' && fwd) ph.speed = Math.min(ph.speed + C.ACCEL * dt, cap);
-        else if (ph.gear === 'R' && bwd) ph.speed = Math.max(ph.speed - C.ACCEL * .6 * dt, -cap * .3);
-        else if (brk) ph.speed = ph.speed > 0 ? Math.max(0, ph.speed - C.BRAKE * dt) : Math.min(0, ph.speed + C.BRAKE * dt);
-        else ph.speed *= Math.pow(.88, dt * 30);
+        if (ph.auto) {
+          updateAutoDrive(dt, sc);
+        } else {
+          // Merge Keyboard and Touch Inputs
+          const fwdInput = fwd || (usingTouch && touchAccel > 0);
+          const bwdInput = bwd || (usingTouch && touchAccel > 0 && ph.gear === 'R');
+          const brkInput = brk || touchBrake;
+          const accelVal = usingTouch ? Math.abs(touchAccel) : 1;
 
-        const ss = 1 - Math.min(Math.abs(ph.speed) / cap, 1) * .45;
-        if (lft) ph.steer = Math.max(ph.steer - C.STEER * dt * ss, -C.MAX_STEER);
-        else if (rgt) ph.steer = Math.min(ph.steer + C.STEER * dt * ss, C.MAX_STEER);
-        else ph.steer *= Math.pow(.82, dt * 30);
+          if (ph.gear === 'D' && fwdInput) ph.speed = Math.min(ph.speed + C.ACCEL * accelVal * dt, cap);
+          else if (ph.gear === 'R' && bwdInput) ph.speed = Math.max(ph.speed - C.ACCEL * .6 * accelVal * dt, -cap * .3);
+          else if (brkInput) ph.speed = ph.speed > 0 ? Math.max(0, ph.speed - C.BRAKE * dt) : Math.min(0, ph.speed + C.BRAKE * dt);
+          else ph.speed *= Math.pow(.88, dt * 30);
+
+          const ss = 1 - Math.min(Math.abs(ph.speed) / cap, 1) * .45;
+          if (usingTouch && Math.abs(touchSteer) > 0.05) {
+            // Direct map joystick X to steer angle
+            const targetSteer = touchSteer * C.MAX_STEER;
+            ph.steer += (targetSteer - ph.steer) * dt * 10;
+          } else {
+            if (lft) ph.steer = Math.max(ph.steer - C.STEER * dt * ss, -C.MAX_STEER);
+            else if (rgt) ph.steer = Math.min(ph.steer + C.STEER * dt * ss, C.MAX_STEER);
+            else ph.steer *= Math.pow(.82, dt * 30);
+          }
+        }
 
         if (Math.abs(ph.speed) > .1) ph.heading -= ph.steer * (ph.speed / cap) * dt * 2.9;
         playerCar.position.x += Math.sin(ph.heading) * ph.speed * dt;
@@ -2267,9 +2981,19 @@
         document.getElementById('ib').classList.toggle('on', brk && Math.abs(ph.speed) > .4);
 
         // Clamp
-        playerCar.position.x = Math.max(-145, Math.min(145, playerCar.position.x));
-        playerCar.position.z = Math.max(-145, Math.min(145, playerCar.position.z));
+        playerCar.position.x = Math.max(-300, Math.min(300, playerCar.position.x));
+        playerCar.position.z = Math.max(-300, Math.min(300, playerCar.position.z));
         distTrav += Math.abs(ph.speed) * dt;
+
+        // Update Audio
+        if (audioManager.isInitialized) {
+          audioManager.updateEngine(ph.speed, (fwd || bwd) ? 1 : 0, ph.gear);
+        }
+
+        // -- COST DEDUCTION per metre driven --
+        const distThisFrame = Math.abs(ph.speed) * dt;
+        playerBalance = Math.max(0, playerBalance - distThisFrame * COST_PER_METER);
+        updBalanceHUD();
       }
 
       function blinkSig() {
@@ -2289,7 +3013,7 @@
       }
       function onMinorRoad() {
         if (!playerCar) return false;
-        return Math.abs(playerCar.position.z - C.MIN_H_Z) < C.MIN_W || Math.abs(playerCar.position.x - C.MIN_V_X) < C.MIN_W;
+        return Math.abs(playerCar.position.z - C.MIN_H_Z) < C.MIN_W || Math.abs(playerCar.position.x - C.MIN_V1_X) < C.MIN_W || Math.abs(playerCar.position.x - C.MIN_V2_X) < C.MIN_W;
       }
 
       // -- LANE DETECTION -------------------------------------------
@@ -2311,29 +3035,28 @@
           const lane = Math.min(C.MAJ_LANES, Math.max(1, Math.ceil(relZ / lw)));
           return { roadType: 'major', road: 'EW_lower', dir: 'west', lane };
         }
-        // NS left (southbound) – Lane 1 at lowest x
-        if (Math.abs(pos.x - C.MAJ_LEFT_X) < hw && Math.abs(pos.z) > C.MAJ_W) {
-          const relX = pos.x - (C.MAJ_LEFT_X - hw);
-          const lane = Math.min(C.MAJ_LANES, Math.max(1, Math.ceil(relX / lw)));
-          return { roadType: 'major', road: 'NS_left', dir: 'south', lane };
-        }
-        // NS right (northbound) – Lane 1 at highest x
-        if (Math.abs(pos.x - C.MAJ_RIGHT_X) < hw && Math.abs(pos.z) > C.MAJ_W) {
-          const relX = pos.x - (C.MAJ_RIGHT_X - hw);
-          const lane = Math.min(C.MAJ_LANES, Math.max(1, Math.ceil(relX / lw)));
-          return { roadType: 'major', road: 'NS_right', dir: 'north', lane };
-        }
-        // Minor horizontal (two-way)
+
+        // Top Horizontal Minor
         if (Math.abs(pos.z - C.MIN_H_Z) < C.MIN_W / 2) {
           const relZ = pos.z - (C.MIN_H_Z - C.MIN_W / 2);
           const lane = Math.min(C.MIN_LANES, Math.max(1, Math.ceil(relZ / C.MIN_LW)));
-          return { roadType: 'minor', road: 'EW_minor', dir: pos.x > 0 ? 'east' : 'west', lane };
+          return { roadType: 'minor', road: 'H_minor', dir: pos.x > 0 ? 'east' : 'west', lane };
         }
-        // Minor vertical (two-way)
-        if (Math.abs(pos.x - C.MIN_V_X) < C.MIN_W / 2) {
-          const relX = pos.x - (C.MIN_V_X - C.MIN_W / 2);
+        // Vertical Minor (V1)
+        if (Math.abs(pos.x - C.MIN_V1_X) < C.MIN_W / 2) {
+          const relX = pos.x - (C.MIN_V1_X - C.MIN_W / 2);
           const lane = Math.min(C.MIN_LANES, Math.max(1, Math.ceil(relX / C.MIN_LW)));
-          return { roadType: 'minor', road: 'NS_minor', dir: pos.z > 0 ? 'south' : 'north', lane };
+          return { roadType: 'minor', road: 'V1_minor', dir: 'north', lane };
+        }
+        // South Horizontal Minor (New)
+        if (Math.abs(pos.z - C.MIN_H_BOT_Z) < C.MIN_W / 2) {
+          const relZ = pos.z - (C.MIN_H_BOT_Z - C.MIN_W / 2);
+          const lane = Math.min(C.MIN_LANES, Math.max(1, Math.ceil(relZ / C.MIN_LW)));
+          return { roadType: 'minor', road: 'H_BOT_minor', dir: 'west', lane };
+        }
+        // Parking Aisle
+        if (Math.abs(pos.z - C.PARK_Z) < 3 && pos.x > C.MIN_V1_X && pos.x < C.MIN_V2_X) {
+          return { roadType: 'parking', lane: 1 };
         }
         if (inRoundabout()) {
           const dx = pos.x - C.RDT_X, dz = pos.z - C.RDT_Z;
@@ -2379,6 +3102,17 @@
         document.getElementById('tlp-g').style.background = state === 'green' ? '#00ff44' : '#003300';
         document.getElementById('tlp-a').style.background = state === 'amber' ? '#ffaa00' : '#332200';
         document.getElementById('tlp-txt').textContent = name.split('--')[0].trim();
+      }
+
+      // -- COST SYSTEM -----------------------------------------------
+      const COST_PER_METER = 0.50; // KES per metre — adjust globally here
+      let playerBalance = 500.00;  // starting credit in KES
+
+      function updBalanceHUD() {
+        const el = document.getElementById('ts-bal');
+        if (!el) return;
+        el.textContent = playerBalance.toFixed(0);
+        el.style.color = playerBalance < 10 ? '#e8321a' : playerBalance < 50 ? '#f5c400' : '#1fc86b';
       }
 
       // -- VIOLATIONS ENGINE -----------------------------------------
@@ -2456,13 +3190,29 @@
         // --- 4. GIVE WAY / YIELD -- check if forcing AI to brake ---
         yieldSigns.forEach((ys, i) => {
           const d = Math.sqrt((pos.x - ys.x) ** 2 + (pos.z - ys.z) ** 2);
-          if (d < ys.r && spd > 2) {
-            // Check if any AI in roundabout is close (simulates forcing them to slow)
+          if (d < ys.r && spd > 1.5) {
+            // [A] Roundabout Yield
             if (ys.isRoundabout) {
-              aiVehicles.filter(v => { const d = Math.sqrt((v.m.position.x - C.RDT_X) ** 2 + (v.m.position.z - C.RDT_Z) ** 2); return d >= C.RDT_INNER && d <= C.RDT_OUTER; }).forEach(v => {
+              aiVehicles.filter(v => {
+                const dv = Math.sqrt((v.m.position.x - C.RDT_X) ** 2 + (v.m.position.z - C.RDT_Z) ** 2);
+                return dv >= C.RDT_INNER && dv <= C.RDT_OUTER;
+              }).forEach(v => {
                 const ad = pos.distanceTo(v.m.position);
                 if (ad < 8 && !coolOf(`yield_${i}`)) {
                   addViol('Failed to yield to roundabout traffic!', C.PENALTIES.NO_YIELD, '⚠️'); setCool(`yield_${i}`, 4);
+                }
+              });
+            }
+            // [B] U-Turn Gap Yield (Traffic from the Right)
+            if (ys.isUTurnGap) {
+              const comingFromUpper = pos.z < C.MAJ_MID_Z;
+              aiVehicles.forEach(v => {
+                const vp = v.m.position;
+                const vOnRight = comingFromUpper ? (vp.z > C.MAJ_MID_Z && vp.x > pos.x) : (vp.z < C.MAJ_MID_Z && vp.x < pos.x);
+                const distToV = pos.distanceTo(vp);
+                if (vOnRight && distToV < 12 && !coolOf(`yield_ut_${i}`)) {
+                  addViol('Failed to yield to traffic from the right! Stop and give way at U-turn gap.', C.PENALTIES.NO_YIELD, '⚠️');
+                  setCool(`yield_ut_${i}`, 5);
                 }
               });
             }
@@ -2783,7 +3533,7 @@
         // Lane 1: 0° (straight/left ~0-90°) or 90° (left turn ~90°)
         // Lane 2: 0° only (straight ~0-90°, reject >100°)
         // Lane 3: 90°-180° (right turn / opposite side)
-        // Lane 4: 90°-360° (right, U-turn, 270°, full circle)
+        // Lane 4: 90°-135° (right turn / slight roundabout arc, explicitly block U-turn/360°)
         const lane = Math.min(4, Math.max(1, rdtEntryLane));
         if (lane === 2 && deg > 110 && !coolOf('rdtex')) {
           addViol(`Lane 2 exit: straight only! You turned ${deg.toFixed(0)}°. Lane 2 is STRAIGHT ONLY.`, C.PENALTIES.WRONG_LANE_EXIT, '🔄');
@@ -2798,10 +3548,18 @@
           addViol(`Lane 3: straight or right only. Turned ${deg.toFixed(0)}°. Use Lane 4 for U-turn.`, C.PENALTIES.WRONG_LANE_EXIT, '🔄');
           setCool('rdtex3', 5);
         }
-        // Lane 4: all 4 options valid – just log the maneuver
-        if (lane === 4 && deg < 60 && deg > 20 && !coolOf('rdtex4')) {
-          addViol(`Lane 4: minimum exit is right (90°). You exited too early at ${deg.toFixed(0)}°.`, C.PENALTIES.WRONG_LANE_EXIT / 2, '🔄');
-          setCool('rdtex4', 5);
+        // Lane 4 strict enforcement: block U-turn (180) and full circle (360). Max ~135 (with some leeway)
+        if (lane === 4) {
+          if (deg > 165 && deg < 225 && !coolOf('rdtex4_u')) {
+            addViol(`Lane 4 (Power Lane) cannot execute U-turn (${deg.toFixed(0)}°)! Use Lane 1 or 2.`, C.PENALTIES.WRONG_LANE_EXIT, '🔄');
+            setCool('rdtex4_u', 5);
+          } else if (deg > 270 && !coolOf('rdtex4_c')) {
+            addViol(`Lane 4 cannot complete full circuit (${deg.toFixed(0)}°)! Exit earlier or use inner lane.`, C.PENALTIES.WRONG_LANE_EXIT, '🔄');
+            setCool('rdtex4_c', 5);
+          } else if (deg < 60 && deg > 20 && !coolOf('rdtex4')) {
+            addViol(`Lane 4: minimum exit is right (90°). You exited too early at ${deg.toFixed(0)}°.`, C.PENALTIES.WRONG_LANE_EXIT / 2, '🔄');
+            setCool('rdtex4', 5);
+          }
         }
         logEvt(`Roundabout exit: Lane ${lane}, arc ${deg.toFixed(0)}°`, deg < 110);
         rdtEntryLane = -1;
@@ -2964,6 +3722,7 @@
         document.getElementById('ts-v').textContent = totalV;
         document.getElementById('ts-t').textContent = `${Math.floor(sessTime / 60)}:${String(Math.floor(sessTime % 60)).padStart(2, '0')}`;
         document.getElementById('ts-spd').textContent = (Math.abs(ph.speed) * 3.6).toFixed(0);
+        updBalanceHUD();
       }
 
       // -- AI INSTRUCTOR (NTSA MTB certified responses) --------------------
@@ -3090,60 +3849,50 @@
         function wp(wx, wz) { return [ox + wx * sc, oy + wz * sc]; }
         ctx.fillStyle = 'rgba(5,10,20,.88)'; ctx.fillRect(mx, my, MS, MS);
         ctx.strokeStyle = 'rgba(245,196,0,.45)'; ctx.lineWidth = 1; ctx.strokeRect(mx, my, MS, MS);
-        // Roads - dual carriageway major
+
         ctx.fillStyle = '#1e2228';
         const mhw = C.MAJ_W / 2;
+        // EW major roads
         ctx.fillRect(mx, oy + (C.MAJ_UPPER_Z - mhw) * sc, MS, C.MAJ_W * sc);
         ctx.fillRect(mx, oy + (C.MAJ_LOWER_Z - mhw) * sc, MS, C.MAJ_W * sc);
-        ctx.fillRect(ox + (C.MAJ_LEFT_X - mhw) * sc, my, C.MAJ_W * sc, MS);
-        ctx.fillRect(ox + (C.MAJ_RIGHT_X - mhw) * sc, my, C.MAJ_W * sc, MS);
-        // Yellow median EW
+
         ctx.fillStyle = '#f5c400';
         ctx.fillRect(mx, oy + C.MAJ_MID_Z * sc - 1, MS, 2);
-        // U-turn gap markers
-        ctx.fillStyle = '#44ff88';
-        [-100, -40, -10].forEach(gx => {
-          const [gxi, gyi] = wp(gx, C.MAJ_MID_Z);
-          ctx.fillRect(gxi - 3, gyi - 3, 6, 6);
-        });
-        // Minor roads (two-way)
+
+        // Minor roads
         ctx.fillStyle = '#252a32';
+        // Top horizontal minor
         ctx.fillRect(mx, oy + (C.MIN_H_Z - C.MIN_W / 2) * sc, MS, C.MIN_W * sc);
-        ctx.fillRect(ox + (C.MIN_V_X - C.MIN_W / 2) * sc, my, C.MIN_W * sc, MS);
+        // Vertical minors
+        ctx.fillRect(ox + (C.MIN_V1_X - C.MIN_W / 2) * sc, my, C.MIN_W * sc, MS);
+        ctx.fillRect(ox + (C.MIN_V2_X - C.MIN_W / 2) * sc, my, C.MIN_W * sc, MS);
+        // Parking
+        ctx.fillRect(ox + C.MIN_V1_X * sc, oy + (C.PARK_Z - 4) * sc, (C.MIN_V2_X - C.MIN_V1_X) * sc, 8 * sc);
+
         // Roundabout
         ctx.beginPath(); ctx.arc(...wp(C.RDT_X, C.RDT_Z), C.RDT_OUTER * sc, 0, Math.PI * 2); ctx.fillStyle = '#1e2228'; ctx.fill();
         ctx.beginPath(); ctx.arc(...wp(C.RDT_X, C.RDT_Z), C.RDT_INNER * sc, 0, Math.PI * 2); ctx.fillStyle = '#1a4010'; ctx.fill();
-        // Parking zones
+
         ctx.fillStyle = 'rgba(80,140,255,.35)';
         parkingZones.forEach(pz => {
           const [px2, py2] = wp(pz.x, pz.z);
           ctx.fillRect(px2 - pz.hw * sc, py2 - pz.hd * sc, pz.hw * 2 * sc, pz.hd * 2 * sc);
         });
-        // Zebra crossings
+
         ctx.fillStyle = 'rgba(255,255,200,.6)';
         zebras.forEach(z => {
           const [zx, zy] = wp(z.cx, z.cz);
           if (z.axis === 'ew') ctx.fillRect(zx - z.roadW / 2 * sc, zy - 2, z.roadW * sc, 4);
           else ctx.fillRect(zx - 2, zy - z.roadW / 2 * sc, 4, z.roadW * sc);
         });
-        // AI stalled indicators
-        aiVehicles.filter(v => v.stalled).forEach(v => {
-          const [ax, ay] = wp(v.m.position.x, v.m.position.z);
-          ctx.beginPath(); ctx.arc(ax, ay, 5, 0, Math.PI * 2);
-          ctx.fillStyle = '#ffaa00'; ctx.fill();
-          ctx.fillStyle = '#000'; ctx.font = '7px monospace'; ctx.fillText('!', ax - 2, ay + 3);
-        });
-        // Dest
+
         if (destMarker) { const [dx, dy] = wp(destMarker.position.x, destMarker.position.z); ctx.beginPath(); ctx.arc(dx, dy, 4, 0, Math.PI * 2); ctx.fillStyle = '#00ff88'; ctx.fill(); }
-        // AI
         aiVehicles.forEach(v => { const [ax, ay] = wp(v.m.position.x, v.m.position.z); ctx.beginPath(); ctx.arc(ax, ay, 2, 0, Math.PI * 2); ctx.fillStyle = '#ff6644'; ctx.fill(); });
-        // Peds
         peds.forEach(p => { const [px2, py2] = wp(p.m.position.x, p.m.position.z); ctx.beginPath(); ctx.arc(px2, py2, 2, 0, Math.PI * 2); ctx.fillStyle = p.onCrossing ? '#ff4444' : '#ffaaaa'; ctx.fill(); });
-        // Player
         if (playerCar) {
           const [px2, py2] = wp(playerCar.position.x, playerCar.position.z);
           ctx.beginPath(); ctx.arc(px2, py2, 4.5, 0, Math.PI * 2); ctx.fillStyle = '#f5c400'; ctx.fill();
-          const ha = ph.heading + Math.PI; // point arrow in forward direction
+          const ha = ph.heading + Math.PI;
           ctx.beginPath(); ctx.moveTo(px2 + Math.sin(ha) * 10, py2 + Math.cos(ha) * 10);
           ctx.lineTo(px2 + Math.sin(ha + 2.5) * 5, py2 + Math.cos(ha + 2.5) * 5);
           ctx.lineTo(px2 + Math.sin(ha - 2.5) * 5, py2 + Math.cos(ha - 2.5) * 5);
@@ -3157,7 +3906,7 @@
         {
           name: 'Basic City Driving', rule: 'Rule 1: Shortest Route', diff: 'e', label: 'BASIC',
           speedLimit: 50, ai: 4, peds: 3, stallAfter: 0,
-          destPos: new THREE.Vector3(50, 0, 55), startPos: new THREE.Vector3(-80, .38, majLaneCentre(C.MAJ_UPPER_Z, 1)), startH: Math.PI / 2,
+          destPos: new THREE.Vector3(C.MIN_V1_X, 0, C.PARK_Z), startPos: new THREE.Vector3(-80, .38, majLaneCentre(C.MAJ_UPPER_Z, 1)), startH: Math.PI / 2,
           desc: 'Follow major road east using correct lane discipline. Obey all traffic signals. Keep left always.',
           hints: ['Keep left at all times -- Lane 1 is the primary lane.',
             'Stop fully at red lights behind the stop line.',
@@ -3167,7 +3916,7 @@
         {
           name: 'Roundabout Navigation', rule: 'Lane Entry/Exit + Yield', diff: 'm', label: 'INTERMEDIATE',
           speedLimit: 50, ai: 8, peds: 2, stallAfter: 0,
-          destPos: new THREE.Vector3(-75, .0, C.MAJ_UPPER_Z), startPos: new THREE.Vector3(RDT_E_MOUTH + 5, .38, majLaneCentre(C.MAJ_LOWER_Z, 1)), startH: -Math.PI / 2,
+          destPos: new THREE.Vector3(-75, .0, C.MAJ_UPPER_Z), startPos: new THREE.Vector3(-100, .38, majLaneCentre(C.MAJ_UPPER_Z, 1)), startH: Math.PI / 2,
           desc: 'Enter roundabout from correct lane. Lanes 1 & 2 use outer ring; Lanes 3 & 4 use inner ring. Yield on entry.',
           hints: ['Major L1/L2 -> outer roundabout lanes. L3/L4 -> inner lanes.',
             'Yield to all vehicles ALREADY in the roundabout.',
@@ -3177,7 +3926,7 @@
         {
           name: 'Lane Exit Mapping', rule: 'Subtraction & Addition Rules', diff: 'm', label: 'INTERMEDIATE',
           speedLimit: 50, ai: 5, peds: 2, stallAfter: 0,
-          destPos: new THREE.Vector3(C.RDT_X, .0, C.RDT_Z - 30), startPos: new THREE.Vector3(-100, .38, majLaneCentre(C.MAJ_UPPER_Z, 2)), startH: Math.PI / 2,
+          destPos: new THREE.Vector3(C.MIN_V1_X, .0, C.MIN_H_Z), startPos: new THREE.Vector3(-100, .38, majLaneCentre(C.MAJ_UPPER_Z, 2)), startH: Math.PI / 2,
           desc: 'Demonstrate subtraction rule (Major->Minor: lane-1) and addition rule (Minor->Major: lane+1).',
           hints: ['Subtraction: Maj L4->Min L3, Maj L3->Min L2, Maj L2->Min L1.',
             'Addition: Min L3->Maj L4, Min L2->Maj L3, Min L1->Maj L2.',
@@ -3187,7 +3936,7 @@
         {
           name: 'Stop & Yield Signs', rule: 'Priority Sign Compliance', diff: 'm', label: 'INTERMEDIATE',
           speedLimit: 30, ai: 4, peds: 4, stallAfter: 0,
-          destPos: new THREE.Vector3(C.MIN_V_X, .0, -40), startPos: new THREE.Vector3(-50, .38, minLaneCentre(C.MIN_H_Z, 1)), startH: Math.PI / 2,
+          destPos: new THREE.Vector3(C.MIN_V1_X, .0, C.MIN_H_Z), startPos: new THREE.Vector3(-50, .38, minLaneCentre(C.MIN_V1_X, 1)), startH: Math.PI / 2,
           desc: 'Navigate minor roads. Full 3-second stop at STOP signs. Yield correctly at GIVE WAY signs.',
           hints: ['STOP sign: reach 0 km/h and hold for 3 full seconds.',
             'YIELD: slow to near-stop, give way to major road traffic.',
@@ -3197,7 +3946,7 @@
         {
           name: 'Pedestrian Crossings', rule: 'Zebra Crossing Rules', diff: 'm', label: 'INTERMEDIATE',
           speedLimit: 30, ai: 4, peds: 6, stallAfter: 0,
-          destPos: new THREE.Vector3(-60, .0, -70), startPos: new THREE.Vector3(C.MIN_V_X + C.MIN_LW / 2, .38, 55), startH: Math.PI,
+          destPos: new THREE.Vector3(-60, .0, C.MAJ_UPPER_Z), startPos: new THREE.Vector3(C.MIN_V1_X + C.MIN_LW / 2, .38, C.PARK_Z + 10), startH: Math.PI,
           desc: 'Pedestrians cross ONLY on Red light. Even if light turns Green mid-cross -- wait until fully clear.',
           hints: ['3-metre rule: decelerate when ped enters your zone.',
             'Stop BEHIND stop line -- never on the stripes.',
@@ -3208,7 +3957,7 @@
         {
           name: 'Parking Maneuvers', rule: 'Rule 3: Parking Last Resort', diff: 'm', label: 'INTERMEDIATE',
           speedLimit: 30, ai: 3, peds: 2, stallAfter: 0,
-          destPos: new THREE.Vector3(66, .0, 46), startPos: new THREE.Vector3(0, .38, minLaneCentre(C.MIN_H_Z, 1)), startH: Math.PI / 2,
+          destPos: new THREE.Vector3(10, .0, C.PARK_Z), startPos: new THREE.Vector3(0, .38, minLaneCentre(C.MIN_V1_X, 1)), startH: Math.PI / 2,
           desc: 'Angle: enter D (forward), exit R (reverse). Parallel: enter R (reverse), exit D (forward). Farthest bay first.',
           hints: ['Angle parking: FORWARD in (D gear), REVERSE out (R gear).',
             'Parallel: REVERSE in (R gear), FORWARD out (D gear).',
@@ -3219,7 +3968,7 @@
         {
           name: 'Obstacle Route-Finding', rule: '3-Route Rule + Stall Avoidance', diff: 'h', label: 'HARD',
           speedLimit: 50, ai: 8, peds: 4, stallAfter: 12,
-          destPos: new THREE.Vector3(-5, .0, 43), startPos: new THREE.Vector3(-80, .38, majLaneCentre(C.MAJ_UPPER_Z, 1)), startH: Math.PI / 2,
+          destPos: new THREE.Vector3(-100, .0, majLaneCentre(C.MAJ_LOWER_Z, 2)), startPos: new THREE.Vector3(-80, .38, majLaneCentre(C.MAJ_UPPER_Z, 1)), startH: Math.PI / 2,
           desc: 'A vehicle will stall ahead. Find the next shortest correct route. Demonstrate all 3 route options.',
           hints: ['Route 1: Shortest. Route 2: Next shortest. Route 3: Longest (with parking).',
             'A stalled vehicle is NOT a reason to stop in the road.',
@@ -3229,7 +3978,7 @@
         {
           name: 'Full MTB Assessment', rule: 'All 3 Rules -- Complete Test', diff: 'h', label: 'EXPERT',
           speedLimit: 50, ai: 10, peds: 8, stallAfter: 30,
-          destPos: new THREE.Vector3(44, .0, 60), startPos: new THREE.Vector3(-80, .38, majLaneCentre(C.MAJ_UPPER_Z, 1)), startH: Math.PI / 2,
+          destPos: new THREE.Vector3(C.MIN_V2_X, .0, C.PARK_Z), startPos: new THREE.Vector3(-80, .38, majLaneCentre(C.MAJ_UPPER_Z, 1)), startH: Math.PI / 2,
           desc: 'Complete NTSA Model Town Board assessment. All rules apply simultaneously. No reminders.',
           hints: ['All MTB rules apply. Subtraction/Addition rules enforced.',
             'Shortest route first, longest second, parking only as last resort.',
@@ -3272,6 +4021,18 @@
       document.getElementById('bsr').addEventListener('click', () => { sigR = !sigR; sigL = false; updSigUI(); });
       document.getElementById('bhn').addEventListener('click', () => hornTrigger());
       document.getElementById('bc2').addEventListener('click', () => cycleCam());
+      document.getElementById('bau').addEventListener('click', () => toggleAuto());
+
+      function toggleAuto() {
+        ph.auto = !ph.auto;
+        document.getElementById('bau').classList.toggle('active', ph.auto);
+        if (ph.auto) {
+          logEvt('📡 Auto-Pilot Activated', true);
+          if (ph.gear !== 'D') setGear('D');
+        } else {
+          logEvt('📡 Auto-Pilot Deactivated');
+        }
+      }
 
       // -- GAME STATE -------------------------------------------------
       let gameRunning = false, activeSc = null;
@@ -3280,6 +4041,12 @@
       document.getElementById('btn-end').addEventListener('click', () => endSession(false));
       document.getElementById('res-retry').addEventListener('click', () => { document.getElementById('res-mod').style.display = 'none'; startSc(); });
       document.getElementById('res-menu').addEventListener('click', () => document.getElementById('res-mod').style.display = 'none');
+      document.getElementById('topup-btn').addEventListener('click', () => {
+        playerBalance += 500;
+        updBalanceHUD();
+        storageManager.saveBalance(playerBalance);
+        document.getElementById('topup-mod').style.display = 'none';
+      });
 
       let stallScheduled = 0; // game time to trigger next stall
       function startSc() {
@@ -3323,6 +4090,16 @@
         document.getElementById('res-g').style.color = score >= 75 ? '#1fc86b' : score >= 60 ? '#f5c400' : '#e8321a';
         document.getElementById('res-fb').innerHTML = sessionFb.slice(-8).map(f => `<div class="mo-fi ${f.pass ? 'p' : 'f'}">${f.pass ? '✓' : '✗'} ${f.msg}</div>`).join('');
         document.getElementById('res-mod').style.display = 'flex';
+
+        // Save Session to IndexedDB
+        storageManager.saveSession({
+          scenarioId: activeSc.name,
+          score: score,
+          grade: grade,
+          violations: totalV,
+          duration: sessTime
+        });
+        storageManager.saveBalance(playerBalance);
       }
 
       // -- DESTINATION PULSE -----------------------------------------
@@ -3365,6 +4142,20 @@
       // Static preview
       buildWorld(SCENARIOS[0]);
       cam.position.set(-20, 60, 20); cam.lookAt(0, 0, 0);
+
+      let lastSaveBal = 0;
+
+      // Initialize Managers
+      let touchManager = null;
+      document.addEventListener('DOMContentLoaded', () => {
+        touchManager = new TouchInputManager();
+        storageManager.init().then(async () => {
+          playerBalance = await storageManager.loadBalance();
+          updBalanceHUD();
+          console.log("Storage System initialized. Initial balance:", playerBalance);
+        }).catch(e => console.error("Storage init failed", e));
+      });
+
       requestAnimationFrame(ts => { lastT = ts; animate(ts); });
     })();
   </script>
